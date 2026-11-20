@@ -5,8 +5,8 @@
  */
 module.exports = {
   BASE_URL: 'http://127.0.0.1:7001',
-  // animal 对猫更贴；脚仍可能被模型当背景（爪/地面色近），属模型局限非框裁切
-  MODEL: 'u2net_animal',
+  // rembg 2.x 没有 u2net_animal；u2net 通用、u2netp 更快边缘稍粗
+  MODEL: 'u2net',
   // alpha matting 在 CPU 上很慢，且对「整脚切掉」帮助有限 → 关掉提速
   ALPHA: false,
   WHITE_BORDER: true

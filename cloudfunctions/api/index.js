@@ -294,6 +294,7 @@ async function runMatting(event = {}, openid = '') {
     provider: result.provider,
     mime: result.mime || 'image/png',
     fileID: uploaded.fileID,
+    bordered: !!result.bordered,
     timing: [...(result.timing || []), `上传云存储: ${Date.now() - upStart}ms`]
   }
   console.log('[api.matting timing] total:', `${Date.now() - started}ms`, {

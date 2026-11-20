@@ -20,10 +20,12 @@ function getRembgEndpoint() {
     err.code = 'NO_REMBG_URL'
     throw err
   }
-  const model = String(rembg.model || 'u2net_animal').trim()
+  const model = String(rembg.model || 'u2netp').trim()
   let endpoint = base.indexOf('/api/remove') >= 0 ? base.split('?')[0] : `${base}/api/remove`
   const qs = []
   if (model) qs.push(`model=${encodeURIComponent(model)}`)
+  // scripts/rembg-server.py 支持服务端白边；官方 rembg s 会忽略此参数
+  if (rembg.border) qs.push('border=1')
   if (rembg.alphaMatting) {
     qs.push('a=true')
     qs.push(`af=${encodeURIComponent(String(rembg.alphaForeground || 240))}`)
@@ -57,7 +59,8 @@ async function matting({ imageBase64 } = {}) {
     method: 'POST',
     headers: {
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      Accept: 'image/png'
+      Accept: 'image/png',
+      ...(getRecognizeConfig().rembg.token ? { 'X-Rembg-Token': getRecognizeConfig().rembg.token } : {})
     },
     body,
     timeoutMs: 120000
@@ -78,6 +81,7 @@ async function matting({ imageBase64 } = {}) {
       ok: true,
       provider: 'rembg',
       imageBase64: normalizeBase64(res.json.image),
+      bordered: !!res.json.bordered,
       mime: 'image/png',
       timing: [`rembg: ${Date.now() - started}ms`]
     }
@@ -112,6 +116,7 @@ async function matting({ imageBase64 } = {}) {
     ok: true,
     provider: 'rembg',
     imageBase64: res.buffer.toString('base64'),
+    bordered: String((res.headers || {})['x-rembg-bordered'] || '') === '1',
     mime: 'image/png',
     timing: [`rembg: ${Date.now() - started}ms`]
   }

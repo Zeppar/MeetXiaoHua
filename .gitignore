@@ -9,3 +9,5 @@ cloudfunctions/**/node_modules/
 **/.env.*
 scripts/.rembg-out/
 project.private.config.json
+.venv/
+__pycache__/

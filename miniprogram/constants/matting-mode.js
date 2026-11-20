@@ -42,9 +42,9 @@ const OPTIONS = [
 ]
 
 const DEFAULT_MODE = 'rembg'
-/** 可用 u2net / u2net_animal / u2netp；animal 更贴猫但首次要下权重 */
+/** 可用 u2net / u2netp / isnet-general-use（rembg 2.x 没有 u2net_animal） */
 /** 与 matting-local.MODEL 对齐；animal 对猫更稳 */
-const QUALITY_MODEL = 'u2net_animal'
+const QUALITY_MODEL = 'u2net'
 
 function normalizeMode(v) {
   const s = String(v || '').trim().toLowerCase()

@@ -328,7 +328,12 @@ function downloadHttpFile(url) {
   })
 }
 
+// 健康检查结果缓存：连续拍照时不必每张都多一次往返；上传失败会清掉缓存
+const HEALTH_TTL_MS = 60000
+let _healthOkAt = 0
+
 function pingLocalRembg() {
+  if (Date.now() - _healthOkAt < HEALTH_TTL_MS) return Promise.resolve(true)
   const base = String(localRembg.BASE_URL || 'http://127.0.0.1:7001').replace(/\/$/, '')
   return new Promise((resolve) => {
     wx.request({
@@ -336,9 +341,14 @@ function pingLocalRembg() {
       method: 'GET',
       timeout: 2500,
       success: (res) => {
-        resolve(!!(res && res.statusCode === 200 && res.data && res.data.ok))
+        const ok = !!(res && res.statusCode === 200 && res.data && res.data.ok)
+        _healthOkAt = ok ? Date.now() : 0
+        resolve(ok)
       },
-      fail: () => resolve(false)
+      fail: () => {
+        _healthOkAt = 0
+        resolve(false)
+      }
     })
   })
 }
@@ -350,6 +360,8 @@ function uploadToLocalRembg(filePath) {
   const model = encodeURIComponent(modelName)
   let url = `${base}/api/remove?model=${model}`
   if (localRembg && localRembg.ALPHA) url += '&a=true&af=200&ab=15&ae=4'
+  // 新服务 scripts/rembg-server.py 支持服务端加白边；旧 Node 代理会忽略这个参数
+  if (!(localRembg && localRembg.WHITE_BORDER === false)) url += '&border=1'
   const started = Date.now()
   console.log('[cloud-matting] upload local rembg', url, 'src=', filePath)
 
@@ -437,6 +449,7 @@ function uploadToLocalRembg(filePath) {
 
           resolve({
             path: outFile,
+            bordered: !!parsed.bordered,
             uploadMs: transferMs,
             rembgMs,
             downloadMs,
@@ -448,6 +461,7 @@ function uploadToLocalRembg(filePath) {
       },
       fail: (err) => {
         console.warn('[cloud-matting] rembg upload fail', err)
+        _healthOkAt = 0
         const msg =
           (err && (err.errMsg || err.message)) ||
           '无法连接本机 rembg（请启动 7000 + 7001 代理）'
@@ -576,6 +590,10 @@ async function resolveCutoutPath(cloudRes, canvas) {
     })
   }
   if (!cutPng) return null
+  if (cloudRes.bordered) {
+    // 自建 rembg-server 已在服务端加好白边
+    return { ok: true, cutoutPath: cutPng, mattingFailed: false, provider: cloudRes.provider || 'cloud', hint: '', timing: cloudRes.timing || [] }
+  }
   return finishWithWhiteBorder(cutPng, cloudRes.provider, canvas, cloudRes.timing)
 }
 
@@ -690,7 +708,11 @@ async function tryLocalRembg(filePath, options = {}) {
 
   const t3 = Date.now()
   let result = null
-  try {
+  if (rembgRes && rembgRes.bordered) {
+    // scripts/rembg-server.py 已在服务端做完主区域清理 + 白边，端上不再跑 canvas
+    result = { ok: true, cutoutPath: cutPng, mattingFailed: false, provider: 'rembg-local', hint: '' }
+    timing.push('3.加白边: 服务端已完成')
+  } else try {
     result = await finishWithWhiteBorder(cutPng, 'rembg-local', rembgOpts.canvas, timing)
   } catch (e) {
     console.warn('[cloud-matting] white border throw, keep raw rembg', e)
@@ -702,7 +724,7 @@ async function tryLocalRembg(filePath, options = {}) {
       hint: '已抠图，白边异常已跳过'
     }
   }
-  timing.push(`3.加白边: ${Date.now() - t3}ms`)
+  if (!(rembgRes && rembgRes.bordered)) timing.push(`3.加白边: ${Date.now() - t3}ms`)
   timing.push(`总耗时: ${Date.now() - totalStart}ms`)
   console.log('[cloud-matting timing]\n' + timing.join('\n'))
 

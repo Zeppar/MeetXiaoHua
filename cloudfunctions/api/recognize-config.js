@@ -61,9 +61,12 @@ function getRecognizeConfig() {
     },
     rembg: {
       url: process.env.REMBG_URL || local.REMBG_URL || '',
-      // 默认轻量快速 u2netp；要更细可用 u2net / u2net_animal
+      // 默认轻量快速 u2netp；要更细可用 u2net / isnet-general-use
       model: process.env.REMBG_MODEL || local.REMBG_MODEL || 'u2netp',
       // Alpha matting 边缘细化（更慢，边缘更干净）
+      // 服务端加白边（仅 scripts/rembg-server.py 支持）
+      border: String(process.env.REMBG_BORDER || local.REMBG_BORDER || 'true') === 'true',
+      token: process.env.REMBG_TOKEN || local.REMBG_TOKEN || '',
       alphaMatting: String(process.env.REMBG_ALPHA || local.REMBG_ALPHA || 'false') === 'true',
       alphaForeground: Number(process.env.REMBG_AF || local.REMBG_AF || 240),
       alphaBackground: Number(process.env.REMBG_AB || local.REMBG_AB || 10),

@@ -6,6 +6,37 @@
 
 ---
 
+## 0. 推荐：常驻服务 scripts/rembg-server.py（更快）
+
+官方 `rembg s` 会在每个请求里重新创建模型 session，而且白边要在小程序端用 canvas 逐像素算，这两步都慢。
+`scripts/rembg-server.py` 做了这些事：
+
+- 启动时加载模型并预热，之后一直常驻
+- 抠图、保留主区域、加白边都在服务端用 numpy/scipy 完成，直接返回贴纸 PNG
+- 小程序直接请求它，不再需要 Node 代理（`rembg-local-proxy.js`）
+
+```bash
+pip install "rembg[cpu]" pillow numpy scipy     # 有 N 卡改用 rembg[gpu]
+
+# 本机开发者工具（替代 7000 + 7001 两个进程，小程序配置不用改）
+python scripts/rembg-server.py
+
+# 给云函数用（公网）
+REMBG_TOKEN=自己设一个长随机串 python scripts/rembg-server.py --host 0.0.0.0 --port 7000
+```
+
+云函数里配置 `REMBG_URL=http://公网IP:7000`、`REMBG_TOKEN=同一个串`，`REMBG_BORDER` 默认为 true。
+每个请求的分步耗时（解码 / 推理 / 白边+编码）会打印在服务端日志里。
+
+**自动兜底：** 先用快模型 u2net（CPU 约 0.4s）。如果它对结果没把握（半透明像素占前景超过 25%，典型症状是只抠出猫头、身体变半透明），会自动换 `birefnet-general-lite` 重抠（CPU 约 10s，整只猫完整）。兜底模型启动时在后台预加载。可用 `REMBG_FALLBACK=`（留空）关闭，`REMBG_FALLBACK_RATIO` 调阈值，单次请求加 `fallback=0` 跳过。有 N 卡时 BiRefNet 会快很多（`pip install "rembg[gpu]"`）。
+
+调试：加 `--debug` 启动，每次请求的输入、原始抠图、最终贴纸会存到 `scripts/.rembg-out/`。
+想更快可以用 `--model u2netp`（约 4MB，CPU 上快好几倍，边缘稍粗），小程序端对应改 `constants/matting-mode.js` 的 `QUALITY_MODEL`。
+
+下面是旧方案（官方镜像），仍然兼容：服务端不加白边时，小程序会自动回到端上加白边。
+
+---
+
 ## 1. 机器要求
 
 - 建议：2 核 4G 起（CPU）；有 GPU 会更快
@@ -70,7 +101,7 @@ rembg s --host 0.0.0.0 --port 7000 --no-ui
 ```js
 MATTING_PROVIDER: 'rembg',
 REMBG_URL: 'http://你的公网IP:7000',
-REMBG_MODEL: 'u2net',   // 猫可用 u2net_animal / isnet-general-use
+REMBG_MODEL: 'u2net',   // 也可用 u2netp（更快）/ isnet-general-use（更细）
 ```
 
 2. 重新上传并部署云函数 `api`。
@@ -96,7 +127,7 @@ MATTING_PROVIDER: 'local'
 | 模型 | 场景 |
 |------|------|
 | `u2net` | 通用（默认） |
-| `u2net_animal` | 动物更友好 |
+| `u2netp` | 轻量，CPU 上快好几倍，边缘稍粗 |
 | `isnet-general-use` | 通用高质量，更慢更吃资源 |
 
 在 `REMBG_MODEL` 或请求 `?model=` 里指定。
