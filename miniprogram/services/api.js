@@ -283,12 +283,38 @@ function mergeBreedReviewFields(cloudCard, localCard) {
 
 function mergeCardLists(cloudCards, localCards) {
   const map = {}
+  // 本地已放生的卡：云端放生失败时云上还在，不能让它「回来」
+  const released = {}
+  try {
+    local.releasedCardIds().forEach((id) => {
+      released[id] = true
+    })
+  } catch (e) {
+    /* ignore */
+  }
+  // 云端卡的 clientId = 当初本地 card_* id；超时没来得及换 id 时据此去重
+  const cloudByClientId = {}
+  ;(cloudCards || []).forEach((c) => {
+    if (c && c.clientId) cloudByClientId[c.clientId] = c
+  })
   ;(localCards || []).forEach((c) => {
-    if (c && c._id) map[c._id] = c
+    if (!c || !c._id) return
+    const twin = cloudByClientId[c._id]
+    if (twin) {
+      try {
+        local.rekeyCard(c._id, twin._id)
+      } catch (e) {
+        /* ignore */
+      }
+      map[twin._id] = { ...c, _id: twin._id }
+      return
+    }
+    map[c._id] = c
   })
   // 云端覆盖同 id；本地独有（云端建卡失败时）仍保留
   ;(cloudCards || []).forEach((c) => {
     if (!c || !c._id) return
+    if (released[c._id]) return
     const localCard = map[c._id]
     if (!localCard) {
       map[c._id] = c
@@ -478,23 +504,28 @@ async function createCard(payload) {
     originalPath: originalPath || payload.originalPath || ''
   }
 
-  let res = null
+  // 双写约定：本地先写（界面立刻可用），云端成功后把本地 card_* 换成云端 id
+  let res = await local.createCard(localPayload)
+  const localCardId = res && res.card && res.card._id
   if (useCloud) {
     try {
       const [cutoutFileId, originalFileId] = await Promise.all([
         uploadLocalImageToCloud(localPayload.cutoutPath, 'cards/cutout'),
         uploadLocalImageToCloud(localPayload.originalPath, 'cards/original')
       ])
-      res = await callCloud('createCard', {
+      const cloudRes = await callCloud('createCard', {
         ...localPayload,
+        clientId: localCardId || '',
         cutoutFileId: cutoutFileId || localPayload.cutoutFileId || '',
         originalFileId: originalFileId || localPayload.originalFileId || '',
         // 云端 path 字段尽量存 fileID，便于纯云端展示
         cutoutPath: cutoutFileId || localPayload.cutoutPath || '',
         originalPath: originalFileId || localPayload.originalPath || ''
       })
-      if (res && res.card) {
+      if (cloudRes && cloudRes.card && cloudRes.card._id) {
         try {
+          // 先换 id（连带记忆/审核/小屋引用），再用云端字段覆盖本地镜像
+          local.rekeyCard(localCardId, cloudRes.card._id)
           // 本地仍是临时链时不要写入镜像，改用云 fileID
           const localCut =
             localPayload.cutoutPath && !isEphemeralPath(localPayload.cutoutPath)
@@ -504,10 +535,11 @@ async function createCard(payload) {
             localPayload.originalPath && !isEphemeralPath(localPayload.originalPath)
               ? localPayload.originalPath
               : ''
-          await local.mirrorCloudCard(res.card, {
+          const mirrored = await local.mirrorCloudCard(cloudRes.card, {
             cutoutPath: localCut || cutoutFileId || '',
             originalPath: localOrig || originalFileId || ''
           })
+          res = { ...cloudRes, card: (mirrored && mirrored.card) || cloudRes.card }
           if (res.card.breedReviewStatus === 'pending' || res.card.pendingBreed) {
             local.upsertBreedReview({
               _id: res.card.breedReviewId || '',
@@ -524,12 +556,9 @@ async function createCard(payload) {
         }
       }
     } catch (e) {
-      console.warn('[api] cloud createCard fail, fallback local', e)
-      res = null
+      // 云失败：保留本地结果，不回滚用户可见状态
+      console.warn('[api] cloud createCard fail, keep local', e)
     }
-  }
-  if (!res || !res.card) {
-    res = await local.createCard(localPayload)
   }
   // 刷新缓存
   try {
@@ -803,15 +832,48 @@ async function reattachCardImage(cardId, filePath) {
   return res
 }
 
+/** 按 _id 合并：云端覆盖同 id，本地独有（云写失败时）保留；云端空列表不会清掉本地 */
+function mergeById(cloudList, localList) {
+  const map = {}
+  ;(localList || []).forEach((x) => {
+    if (x && x._id) map[x._id] = x
+  })
+  ;(cloudList || []).forEach((x) => {
+    if (x && x._id) map[x._id] = { ...(map[x._id] || {}), ...x }
+  })
+  return Object.keys(map).map((k) => map[k])
+}
+
 async function listMemories(cardId) {
-  return withFallback('listMemories', () => local.listMemories(cardId), { cardId })
+  const localRes = await local.listMemories(cardId)
+  if (!useCloud) return localRes
+  try {
+    const cloudRes = await callCloud('listMemories', { cardId })
+    const memories = mergeById(cloudRes && cloudRes.memories, localRes.memories).sort(
+      (a, b) => (a.createdAt || 0) - (b.createdAt || 0)
+    )
+    return { memories }
+  } catch (e) {
+    console.warn('[api] cloud listMemories fail, use local', e)
+    return localRes
+  }
 }
 
 async function createMemory(payload) {
+  // 云端列表出来的卡可能还没落本地，本地 createMemory 会报 card not found
+  await ensureLocalCard(payload && payload.cardId)
   return dualWrite({
     action: 'createMemory',
     localWrite: () => local.createMemory(payload),
-    cloudPayload: payload || {}
+    cloudPayload: payload || {},
+    afterCloud: async (cloudRes, localRes) => {
+      const localId = localRes && localRes.memory && localRes.memory._id
+      if (cloudRes && cloudRes.memory && localId) {
+        const re = await local.rekeyMemory(localId, cloudRes.memory)
+        if (re && re.memory) return { memory: re.memory }
+      }
+      return cloudRes || localRes
+    }
   })
 }
 
@@ -819,7 +881,12 @@ async function deleteMemory(memoryId) {
   return dualWrite({
     action: 'deleteMemory',
     localWrite: () => local.deleteMemory(memoryId),
-    cloudPayload: { memoryId }
+    cloudPayload: { memoryId },
+    afterCloud: (cloudRes, localRes) => ({
+      ...(localRes || {}),
+      ...(cloudRes || {}),
+      cardId: (cloudRes && cloudRes.cardId) || (localRes && localRes.cardId) || ''
+    })
   })
 }
 
@@ -976,7 +1043,21 @@ async function dismissLeftTrace(payload) {
 }
 
 async function listOutingLogs(payload) {
-  return withFallback('listOutingLogs', () => local.listOutingLogs(payload), payload)
+  // 不能用 withFallback：云端空列表会盖掉本地有效记录
+  const localRes = await local.listOutingLogs(payload)
+  if (!useCloud) return localRes
+  try {
+    const cloudRes = await callCloud('listOutingLogs', payload)
+    const cloudLogs = (cloudRes && cloudRes.logs) || []
+    if (!cloudLogs.length) return localRes
+    const logs = mergeById(cloudLogs, localRes.logs).sort(
+      (a, b) => (b.returnedAt || 0) - (a.returnedAt || 0)
+    )
+    return { logs }
+  } catch (e) {
+    console.warn('[api] cloud listOutingLogs fail, use local', e)
+    return localRes
+  }
 }
 
 async function listVisitLogs(payload = {}) {

@@ -1477,6 +1477,49 @@ async function createCard(payload) {
   return { card }
 }
 
+/**
+ * 本地先建卡（card_*）→ 云端成功后把本地 id 换成云端 _id，并改掉所有引用
+ * 返回是否找到并替换
+ */
+function rekeyCard(oldId, newId) {
+  if (!oldId || !newId || oldId === newId) return false
+  const db = load()
+  const card = db.cards.find((c) => c._id === oldId)
+  if (!card) return false
+  // 云端 id 已有镜像时，去掉旧的本地卡避免重复
+  if (db.cards.some((c) => c._id === newId)) {
+    db.cards = db.cards.filter((c) => c._id !== oldId)
+  } else {
+    card._id = newId
+  }
+  ;(db.memories || []).forEach((m) => {
+    if (m.cardId === oldId) m.cardId = newId
+  })
+  ;(db.breedReviews || []).forEach((r) => {
+    if (r.cardId === oldId) r.cardId = newId
+  })
+  ;(db.outingLogs || []).forEach((l) => {
+    if (l.cardId === oldId) l.cardId = newId
+  })
+  Object.keys(db.users || {}).forEach((k) => {
+    const u = db.users[k]
+    if (!u) return
+    if (u.displayCardId === oldId) u.displayCardId = newId
+    if (Array.isArray(u.roomMateIds)) {
+      u.roomMateIds = u.roomMateIds.map((id) => (id === oldId ? newId : id))
+    }
+    if (u.outing && u.outing.cardId === oldId) u.outing.cardId = newId
+  })
+  save(db)
+  return true
+}
+
+/** 本地已放生的卡 id：云端放生失败时，合并列表要过滤掉，避免猫「回来」 */
+function releasedCardIds() {
+  const db = load()
+  return (db.released || []).map((r) => r && r.cardId).filter(Boolean)
+}
+
 /** 云端建卡成功后写入本地镜像，避免 getCard 云端读失败时「卡牌不存在」 */
 async function mirrorCloudCard(cloudCard, localPaths = {}) {
   if (!cloudCard || !cloudCard._id) return { card: null }
@@ -1775,11 +1818,30 @@ async function createMemory(payload) {
   return { memory }
 }
 
+/** 云端建记忆成功后，把本地 mem_* 换成云端 _id，后续删除两边才能对上 */
+async function rekeyMemory(localId, cloudMemory) {
+  if (!localId || !cloudMemory || !cloudMemory._id) return { memory: null }
+  const db = load()
+  const idx = db.memories.findIndex((m) => m._id === localId)
+  if (idx < 0) return { memory: null }
+  const cur = db.memories[idx]
+  db.memories[idx] = {
+    ...cur,
+    ...cloudMemory,
+    _openid: cur._openid,
+    // 本地图片路径优先（开发者工具可读）
+    imagePath: cur.imagePath || cloudMemory.imagePath || ''
+  }
+  save(db)
+  return { memory: db.memories[idx] }
+}
+
 async function deleteMemory(memoryId) {
   const db = load()
   const openid = getOpenId()
   const idx = db.memories.findIndex((m) => m._id === memoryId && m._openid === openid)
-  if (idx < 0) throw new Error('memory not found')
+  // 只存在云端的记忆：本地没有也算成功，让云端删除继续执行
+  if (idx < 0) return { ok: true, cardId: '', localMissing: true }
   const cardId = db.memories[idx].cardId
   db.memories.splice(idx, 1)
   recomputeStats(db, openid)
@@ -1839,6 +1901,8 @@ module.exports = {
   getCard,
   createCard,
   mirrorCloudCard,
+  rekeyCard,
+  releasedCardIds,
   updateCard,
   requestBreedChange,
   reviewBreedChange,
@@ -1846,6 +1910,7 @@ module.exports = {
   upsertBreedReview,
   listMemories,
   createMemory,
+  rekeyMemory,
   deleteMemory,
   reportDuelResult,
   breedFilters,

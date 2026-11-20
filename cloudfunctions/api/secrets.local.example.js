@@ -12,5 +12,8 @@ module.exports = {
   // 腾讯（保留；RECOGNIZE_PROVIDER=tencent 时使用）
   TENCENT_SECRET_ID: '',
   TENCENT_SECRET_KEY: '',
-  TENCENT_REGION: 'ap-guangzhou'
+  TENCENT_REGION: 'ap-guangzhou',
+
+  // 品种审核员 openid（逗号分隔）；不填 = 开发模式，仅卡主可审核自己的卡
+  ADMIN_OPENIDS: ''
 }

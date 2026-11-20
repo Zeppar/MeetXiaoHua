@@ -422,11 +422,13 @@ Page({
                 if (token !== this.recognizeToken) return
                 if (this.data.state !== 'preview' || !this.data.result) return
 
+                // 用户已手动选品种：晚到的识别结果只回填 recognizedBreed，不覆盖手选
+                const manual = !!this.data.result.breedManual
                 const petType = String((cloud && cloud.petType) || '')
                 if (cloud && cloud.ok === false && petType && petType !== 'cat') {
                   // 贴纸已出：非猫只改文案，不再打回 loading/失败页
                   this.setData({
-                    'result.breed': '待识别',
+                    ...(manual ? {} : { 'result.breed': '待识别' }),
                     'result.hint': cloud.message || '未识别为猫，可点编辑改名'
                   })
                   return
@@ -445,7 +447,7 @@ Page({
                 steps.push({ text: `百度品种识别: ${breedMs}ms` })
                 this.setData({
                   timingSteps: steps,
-                  'result.breed': breed,
+                  ...(manual ? {} : { 'result.breed': breed }),
                   'result.recognizedBreed': recognized ? breed : '',
                   'result.confidence': confidence,
                   'result.hint': recognized
@@ -459,7 +461,7 @@ Page({
                 if (token !== this.recognizeToken) return
                 if (this.data.state !== 'preview' || !this.data.result) return
                 this.setData({
-                  'result.breed': '待识别',
+                  ...(this.data.result.breedManual ? {} : { 'result.breed': '待识别' }),
                   'result.recognizedBreed': '',
                   'result.hint': '品种识别失败，可点编辑改名'
                 })
@@ -703,10 +705,13 @@ Page({
   },
 
   async persistCard() {
-    if (this.data.saving || !this.data.result) return
+    // 同步锁：setData 是异步的，且下面要 await 定位，两次快速点击都会穿过 data.saving
+    if (this._saving || this.data.saving || !this.data.result) return
+    this._saving = true
     if (!isValidGeo(this.data.geo)) {
       const ok = await this.ensureGeo()
       if (!ok) {
+        this._saving = false
         this.setData({ showPlaceModal: true })
         return
       }
@@ -716,10 +721,12 @@ Page({
     wx.showLoading({ title: '保存中', mask: true })
 
     const r = this.data.result
+    // 识别还没回来就保存：别把占位文案「识别中…」当品种永久存下来
+    const breedPending = r.breed === '识别中…'
     try {
       const { card } = await api.createCard({
-        breed: r.breed,
-        recognizedBreed: r.recognizedBreed,
+        breed: breedPending ? '待识别' : r.breed,
+        recognizedBreed: breedPending ? '' : r.recognizedBreed,
         breedManual: !!r.breedManual,
         confidence: r.confidence,
         mattingFailed: r.mattingFailed,
@@ -734,6 +741,7 @@ Page({
       this.setData({ saving: false })
       nav.redirectTo(this, `/pages/card-detail/card-detail?id=${card._id}`)
     } catch (err) {
+      this._saving = false
       wx.hideLoading()
       this.setData({ saving: false })
       if (err && err.code === 'GEO_REQUIRED') {

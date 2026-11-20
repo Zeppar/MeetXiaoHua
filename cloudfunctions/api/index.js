@@ -323,14 +323,11 @@ async function repairOrphanCards(openid) {
     const res = await db.collection('cards').orderBy('createdAt', 'desc').limit(100).get()
     const all = res.data || []
     scanned = all.length
-    const ownedCount = all.filter((c) => cardBelongsTo(c, openid)).length
-    // 开发期：当前用户 0 卡且库里总量不大时，把无归属 / 非本用户的卡一并收回
-    const reclaimAll = ownedCount === 0 && all.length > 0 && all.length <= 20
-
+    // 只认领真正无归属的历史卡；有 _openid / ownerOpenId 的卡一律不动（防止抢别人的卡）
     for (const card of all) {
       if (cardBelongsTo(card, openid)) continue
       const orphan = !card._openid && !card.ownerOpenId
-      if (!orphan && !reclaimAll) continue
+      if (!orphan) continue
       const oldId = card._id
       const { _id, ...rest } = card
       const doc = {
@@ -434,9 +431,20 @@ async function createCard(openid, payload = {}) {
     breedReviewStatus = 'pending'
     breed = recognizedBreed || '待识别'
   }
+  // 幂等：客户端带本地卡 id，重试/超时后再次提交时直接返回已建的卡
+  const clientId = clampText(payload.clientId || '', 64)
+  if (clientId) {
+    try {
+      const dup = await db.collection('cards').where({ _openid: openid, clientId }).limit(1).get()
+      if (dup.data && dup.data[0]) return { card: dup.data[0], deduped: true }
+    } catch (e) {
+      /* ignore */
+    }
+  }
   const doc = {
     _openid: openid,
     ownerOpenId: openid,
+    clientId,
     cutoutFileId: payload.cutoutFileId || '',
     originalFileId: payload.originalFileId || '',
     cutoutPath: payload.cutoutPath || '',
@@ -481,18 +489,11 @@ async function createCard(openid, payload = {}) {
 }
 
 async function updateCard(openid, cardId, patch = {}) {
-  let { card } = await getCard(openid, cardId)
-  if (!card && cardId) {
-    try {
-      const raw = await db.collection('cards').doc(cardId).get()
-      card = raw.data || null
-    } catch (e) {
-      card = null
-    }
-  }
-  if (!card) return { error: 'card not found', code: 'NOT_FOUND' }
+  // getCard 已做归属校验（别人的卡返回 null），不能再绕过去读原始文档
+  const { card } = await getCard(openid, cardId)
+  if (!card || !cardBelongsTo(card, openid)) return { error: 'card not found', code: 'NOT_FOUND' }
   const data = {}
-  if (!card.ownerOpenId || card.ownerOpenId !== openid) data.ownerOpenId = openid
+  if (!card.ownerOpenId) data.ownerOpenId = openid
   if (patch.name !== undefined) data.name = clampText(patch.name, 12)
   // 品种仅允许审核通过后写入
   if (patch.breed !== undefined && patch._breedReviewApply) {
@@ -574,7 +575,42 @@ async function requestBreedChange(openid, { cardId, breed }) {
   }
 }
 
-async function reviewBreedChange(openid, { reviewId, cardId, approve, approveBreed }) {
+/**
+ * 审核员名单：环境变量 / secrets.local.js 里的 ADMIN_OPENIDS（逗号分隔）
+ * 未配置时为开发模式：只允许卡主审核自己的卡（上线前务必配置）
+ */
+function getAdminOpenIds() {
+  const local = require('./recognize-config').loadLocalSecrets()
+  const raw = process.env.ADMIN_OPENIDS || local.ADMIN_OPENIDS || ''
+  const list = Array.isArray(raw) ? raw : String(raw).split(',')
+  return list.map((s) => String(s).trim()).filter(Boolean)
+}
+
+async function loadCardForReview(openid, cardId) {
+  if (!cardId) return null
+  const admins = getAdminOpenIds()
+  if (admins.length) {
+    if (admins.indexOf(openid) < 0) return null
+    try {
+      const raw = await db.collection('cards').doc(cardId).get()
+      return raw.data || null
+    } catch (e) {
+      return null
+    }
+  }
+  const { card } = await getCard(openid, cardId)
+  return card && cardBelongsTo(card, openid) ? card : null
+}
+
+async function reviewBreedChange(openid, event = {}) {
+  // 不信任客户端传来的 approveBreed：目标品种只取审核单 / 卡上的 pendingBreed
+  const { reviewId, approve } = event
+  let { cardId } = event
+  const admins = getAdminOpenIds()
+  if (admins.length && admins.indexOf(openid) < 0) {
+    return { error: '没有审核权限', code: 'FORBIDDEN' }
+  }
+  if (!admins.length) console.warn('[reviewBreedChange] ADMIN_OPENIDS 未配置，按开发模式仅允许卡主审核')
   let review = null
   if (reviewId) {
     try {
@@ -598,15 +634,13 @@ async function reviewBreedChange(openid, { reviewId, cardId, approve, approveBre
     }
   }
 
-  // 审核表缺失时，直接按卡上的 pending / 客户端带来的 approveBreed 落品种
+  // 审核表缺失时，只按卡上的 pendingBreed 落品种
   if (!review || review.status !== 'pending') {
     if (!cardId) return { error: '没有待审申请', code: 'GONE' }
-    const { card } = await getCard(openid, cardId)
+    const card = await loadCardForReview(openid, cardId)
     if (!card) return { error: 'card not found', code: 'NOT_FOUND' }
-    const toBreed = clampText(
-      approveBreed || card.pendingBreed || '',
-      20
-    )
+    if (card.breedReviewStatus !== 'pending') return { error: '没有待审申请', code: 'GONE' }
+    const toBreed = clampText(card.pendingBreed || '', 20)
     if (approve) {
       if (!toBreed) return { error: '缺少目标品种，无法通过', code: 'BAD_REQUEST' }
       await db.collection('cards').doc(cardId).update({
@@ -618,18 +652,21 @@ async function reviewBreedChange(openid, { reviewId, cardId, approve, approveBre
           breedReviewId: ''
         }
       })
-      const again = await getCard(openid, cardId)
-      return { card: again.card, toast: '审核已通过，品种已更新' }
+      return { card: await loadCardForReview(openid, cardId), toast: '审核已通过，品种已更新' }
     }
     await db.collection('cards').doc(cardId).update({
       data: { pendingBreed: '', breedReviewStatus: 'rejected', breedReviewId: '' }
     })
-    const again = await getCard(openid, cardId)
-    return { card: again.card, toast: '审核未通过，仍保持原品种' }
+    return { card: await loadCardForReview(openid, cardId), toast: '审核未通过，仍保持原品种' }
   }
 
   const cid = review.cardId
-  const toBreed = clampText(review.toBreed || approveBreed || '', 20)
+  // 审核单对应的卡必须是自己的（开发模式）或调用者是审核员
+  if (!(await loadCardForReview(openid, cid))) return { error: 'card not found', code: 'NOT_FOUND' }
+  if (!admins.length && review._openid && review._openid !== openid) {
+    return { error: '没有审核权限', code: 'FORBIDDEN' }
+  }
+  const toBreed = clampText(review.toBreed || '', 20)
   if (approve) {
     if (!toBreed) return { error: '缺少目标品种，无法通过', code: 'BAD_REQUEST' }
     try {
@@ -648,8 +685,7 @@ async function reviewBreedChange(openid, { reviewId, cardId, approve, approveBre
         breedReviewId: ''
       }
     })
-    const again = await getCard(openid, cid)
-    return { card: again.card, toast: '审核已通过，品种已更新' }
+    return { card: await loadCardForReview(openid, cid), toast: '审核已通过，品种已更新' }
   }
   try {
     await db.collection('breed_reviews').doc(review._id).update({
@@ -661,8 +697,7 @@ async function reviewBreedChange(openid, { reviewId, cardId, approve, approveBre
   await db.collection('cards').doc(cid).update({
     data: { pendingBreed: '', breedReviewStatus: 'rejected', breedReviewId: '' }
   })
-  const again = await getCard(openid, cid)
-  return { card: again.card, toast: '审核未通过，仍保持原品种' }
+  return { card: await loadCardForReview(openid, cid), toast: '审核未通过，仍保持原品种' }
 }
 
 async function listBreedReviews(openid, { status } = {}) {
@@ -1241,6 +1276,8 @@ async function tickAndGetRoomState(openid) {
       outing.unreadReport = buildReport(outing, displayCard.breed, settings.showDistance)
       await db.collection('outingLogs').add({
         data: {
+          // 云函数里 add 不会自动带 _openid，listOutingLogs 按它过滤，必须手动写
+          _openid: openid,
           cardId: outing.cardId,
           distanceKm: outing.distanceKm,
           behaviorText: outing.behaviorText,
@@ -1290,9 +1327,9 @@ async function tickAndGetRoomState(openid) {
   }
 
   const showDistance = (user.settings || defaultSettings()).showDistance !== false
-  const outing = user.outing || {}
-  const outingActive = outing.status === 'out' || outing.status === 'visiting'
-  const outingCardId = outingActive ? outing.cardId || user.displayCardId || '' : ''
+  const curOuting = user.outing || {}
+  const outingActive = curOuting.status === 'out' || curOuting.status === 'visiting'
+  const outingCardId = outingActive ? curOuting.cardId || user.displayCardId || '' : ''
   let outingCatName = ''
   if (outingCardId) {
     try {
@@ -1312,7 +1349,7 @@ async function tickAndGetRoomState(openid) {
         : 'none'
   const outingPhase =
     outingActive
-      ? outing.status === 'visiting'
+      ? curOuting.status === 'visiting'
         ? 'visiting'
         : 'out'
       : myCatStatus === 'home'
@@ -1410,7 +1447,13 @@ async function dismissReport(openid, { auto }) {
 }
 
 async function dismissLeftTrace(openid, { visitId }) {
-  await db.collection('visits').doc(visitId).update({ data: { seenLeft: true } })
+  if (!visitId) return { error: '缺少 visitId', code: 'BAD_REQUEST' }
+  // 只能关闭自己小屋（host）的来访痕迹
+  const res = await db
+    .collection('visits')
+    .where({ _id: visitId, hostOpenId: openid })
+    .update({ data: { seenLeft: true } })
+  if (!res || !res.stats || !res.stats.updated) return { error: 'visit not found', code: 'NOT_FOUND' }
   return { ok: true }
 }
 
