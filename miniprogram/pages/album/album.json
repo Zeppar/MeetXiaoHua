@@ -1,0 +1,13 @@
+{
+  "navigationStyle": "custom",
+  "navigationBarTitleText": "我的猫猫记录",
+  "navigationBarBackgroundColor": "#b9dcff",
+  "backgroundColor": "#b9dcff",
+  "backgroundColorTop": "#b9dcff",
+  "backgroundColorBottom": "#f5f7fa",
+  "disableScroll": true,
+  "usingComponents": {
+    "card-thumb": "/components/card-thumb/card-thumb",
+    "text-modal": "/components/text-modal/text-modal"
+  }
+}

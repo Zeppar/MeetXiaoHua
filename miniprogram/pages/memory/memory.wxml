@@ -1,0 +1,56 @@
+<view class="page memory">
+  <view class="header" wx:if="{{card}}">
+    <image class="avatar" src="{{displayImage}}" mode="aspectFill" />
+    <view class="header-breed">{{card.breed}}</view>
+  </view>
+
+  <view wx:if="{{ready && memories.length}}" class="timeline">
+    <view
+      wx:for="{{memories}}"
+      wx:key="_id"
+      class="mem-item"
+      data-id="{{item._id}}"
+      bindlongpress="onLongDelete"
+    >
+      <view class="mem-time">{{item.timeLabel}}</view>
+      <view class="mem-text">{{item.text}}</view>
+      <image
+        wx:if="{{item.imagePath}}"
+        class="mem-img"
+        src="{{item.imagePath}}"
+        mode="aspectFill"
+        data-src="{{item.imagePath}}"
+        bindtap="onPreviewImg"
+      />
+    </view>
+  </view>
+
+  <empty-state
+    wx:elif="{{ready}}"
+    main="{{emptyMain}}"
+    sub="{{emptySub}}"
+    button-text="{{addFirst}}"
+    bind:action="onAdd"
+  />
+
+  <view wx:if="{{ready}}" class="footer safe-bottom">
+    <button class="btn-primary" bindtap="onAdd">{{addText}}</button>
+  </view>
+
+  <text-modal
+    show="{{showAdd}}"
+    title="添加记忆"
+    placeholder="写下和它有关的小事…"
+    value="{{draft}}"
+    maxlength="{{max}}"
+    cancel-text="取消"
+    confirm-text="保存"
+    extra="{{pickImageText}}"
+    bind:cancel="onCancelAdd"
+    bind:confirm="onConfirmAdd"
+    bind:input="onDraftInput"
+    bind:extra="onPickImage"
+  />
+
+  <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+</view>

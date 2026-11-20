@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "它的出门记录",
+  "usingComponents": {
+    "empty-state": "/components/empty-state/empty-state"
+  }
+}

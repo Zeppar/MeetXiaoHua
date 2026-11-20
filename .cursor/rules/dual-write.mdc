@@ -1,0 +1,25 @@
+---
+description: 写操作必须同时更新云函数与本地存储
+alwaysApply: true
+---
+
+# 云端 + 本地双写
+
+MeetXiaoHua 使用微信云开发 + 本地 `local-store` 双写。
+
+## 强制约定
+
+- 任何**写操作**（建卡、改卡、换品种、审核、放生、收养、记忆、小屋互动等）必须：
+  1. **本地先写**（保证界面立刻正确）
+  2. **云函数同步**（`cloudfunctions/api` 对应 action）
+  3. 云成功后 **mirror 回本地**（对齐云端 id / 字段）
+  4. 云失败时 **保留本地结果**，不要回滚用户可见状态
+- 改云函数逻辑后，提醒在微信开发者工具**上传并部署** `api`
+- 客户端统一走 `miniprogram/services/api.js` 的 `dualWrite` / 既有双写路径，禁止只改一侧
+- 审核相关还要同步本地 `breedReviews`（`upsertBreedReview`）
+
+## 禁止
+
+- 只改 `local-store` 不改云函数（或相反）
+- 云端空列表覆盖本地有效数据
+- 用 `withFallback` 做写操作（读可用；写用 `dualWrite`）

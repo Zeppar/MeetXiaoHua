@@ -1,0 +1,70 @@
+.memory {
+  background: #f5f7fa !important;
+  padding-bottom: 220rpx;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-bottom: 28rpx;
+  background: #fff;
+  border-radius: 28rpx;
+  padding: 20rpx;
+  box-shadow: 0 12rpx 28rpx rgba(70, 100, 140, 0.1);
+}
+
+.avatar {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 24rpx;
+  background: #eef3f8;
+}
+
+.header-breed {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #1f2430;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.mem-item {
+  background: #fff;
+  border-radius: 28rpx;
+  padding: 24rpx;
+  box-shadow: 0 12rpx 28rpx rgba(70, 100, 140, 0.08);
+}
+
+.mem-time {
+  font-size: 22rpx;
+  color: #8b95a5;
+}
+
+.mem-text {
+  margin-top: 10rpx;
+  font-size: 28rpx;
+  color: #1f2430;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.mem-img {
+  margin-top: 16rpx;
+  width: 100%;
+  height: 280rpx;
+  border-radius: 20rpx;
+}
+
+.footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent, #f5f7fa 35%);
+}

@@ -1,0 +1,26 @@
+<view wx:if="{{show}}" class="mask" catchtouchmove="noop" bindtap="onCancel">
+  <view class="panel" catchtap="noop">
+    <view class="panel-title">{{title}}</view>
+    <view wx:if="{{desc}}" class="panel-desc">{{desc}}</view>
+    <textarea
+      wx:if="{{mode === 'textarea' || mode === 'input'}}"
+      class="panel-input"
+      maxlength="{{maxlength}}"
+      placeholder="{{placeholder}}"
+      value="{{value}}"
+      bindinput="onInput"
+      auto-height
+      fixed
+      show-confirm-bar="{{false}}"
+      adjust-position
+      cursor-spacing="24"
+    />
+    <view wx:if="{{mode === 'textarea' || mode === 'input'}}" class="counter">{{value.length}}/{{maxlength}}</view>
+    <view wx:if="{{extra}}" class="extra" bindtap="onExtra">{{extra}}</view>
+    <slot />
+    <view class="actions">
+      <button class="act" bindtap="onCancel">{{cancelText}}</button>
+      <button class="act-main" bindtap="onConfirm">{{confirmText}}</button>
+    </view>
+  </view>
+</view>

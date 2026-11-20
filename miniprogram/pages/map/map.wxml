@@ -1,0 +1,273 @@
+<view class="map-page">
+  <map
+    class="map"
+    id="footprintMap"
+    longitude="{{longitude}}"
+    latitude="{{latitude}}"
+    scale="{{mapSetting.scale}}"
+    markers="{{markers}}"
+    show-location="{{mapSetting.showLocation}}"
+    enable-scroll="{{mapSetting.enableScroll}}"
+    enable-zoom="{{mapSetting.enableZoom}}"
+    enable-rotate="{{mapSetting.enableRotate}}"
+    enable-3D="{{mapSetting.enable3D}}"
+    enable-overlooking="{{mapSetting.enableOverlooking}}"
+    enable-satellite="{{mapSetting.enableSatellite}}"
+    enable-traffic="{{mapSetting.enableTraffic}}"
+    enable-poi="{{mapSetting.enablePoi}}"
+    enable-building="{{mapSetting.enableBuilding}}"
+    show-compass="{{mapSetting.showCompass}}"
+    show-scale="{{mapSetting.showScale}}"
+    rotate="{{mapSetting.rotate}}"
+    skew="{{mapSetting.skew}}"
+    bindmarkertap="onMarkerTap"
+    bindcallouttap="onCalloutTap"
+    bindtap="onMapTap"
+    bindregionchange="onRegionChange"
+  />
+
+  <!-- 勿用全屏遮罩盖住 map：原生组件会被挡住，小猫标记点不到 -->
+  <view wx:if="{{mapSetting.showWash}}" class="map-wash map-wash-top"></view>
+  <view wx:if="{{mapSetting.showWash}}" class="map-wash map-wash-bottom"></view>
+  <view wx:if="{{mapSetting.showVeil}}" class="map-veil map-veil-top"></view>
+  <view wx:if="{{mapSetting.showVeil}}" class="map-veil map-veil-bottom"></view>
+
+  <view class="nav-bar" style="padding-top: {{statusBar}}px; height: {{navBarHeight}}px;">
+    <view class="nav-inner" style="height: {{navHeight}}px;">
+      <view class="nav-back" catchtap="onBack">
+        <view class="nav-back-chevron"></view>
+      </view>
+      <text class="nav-title">我的足迹</text>
+      <view class="nav-settings" catchtap="onOpenSettings">设置</view>
+    </view>
+  </view>
+
+  <view class="privacy-chip" style="top: {{chipTop}}px;">只有你能看见的相遇地点</view>
+  <view wx:if="{{ready && footprintCount}}" class="count-chip" style="top: {{chipTop + 36}}px;">
+    足迹 {{footprintCount}} 只{{albumCount > footprintCount ? ' · 图鉴 ' + albumCount + ' 只' : ''}}
+  </view>
+
+  <view class="side-tools">
+    <view class="tool-btn" catchtap="onRecenter" aria-role="button" aria-label="回到定位">
+      <view class="i-locate">
+        <view class="i-locate-ring"></view>
+        <view class="i-locate-dot"></view>
+        <view class="i-locate-arm i-locate-n"></view>
+        <view class="i-locate-arm i-locate-s"></view>
+        <view class="i-locate-arm i-locate-w"></view>
+        <view class="i-locate-arm i-locate-e"></view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{ready && !footprintCount && !bubble && !clusterSheet && !showSettings}}" class="empty-tip">
+    <view class="empty-tip-main">{{emptyMain}}</view>
+    <view class="empty-tip-sub">{{emptySub}}</view>
+    <view class="empty-tip-cta" bindtap="onGoShoot">{{goShoot}}</view>
+  </view>
+
+  <!-- 聚合点：多只猫列表 -->
+  <view
+    wx:if="{{clusterSheet && !showSettings && !detailCard}}"
+    class="cluster-mask"
+    catchtouchmove="noop"
+    bindtap="onCloseClusterSheet"
+  >
+    <view class="cluster-sheet" catchtap="noop">
+      <view class="sheet-handle"></view>
+      <view class="cluster-head">
+        <view class="cluster-title">{{clusterSheet.title}}</view>
+        <view class="cluster-close" catchtap="onCloseClusterSheet">关闭</view>
+      </view>
+      <view class="cluster-sub">相邻足迹合并在一起，点开可切换查看</view>
+      <scroll-view scroll-y class="cluster-scroll" enhanced show-scrollbar="{{false}}">
+        <view
+          wx:for="{{clusterSheet.items}}"
+          wx:key="id"
+          class="cluster-item"
+          data-id="{{item.id}}"
+          bindtap="onPickClusterItem"
+        >
+          <view class="cluster-thumb">
+            <image wx:if="{{item.image}}" class="cluster-img" src="{{item.image}}" mode="aspectFit" />
+            <view wx:else class="cluster-img cluster-img-empty">猫</view>
+          </view>
+          <view class="cluster-meta">
+            <view class="cluster-name">{{item.name}}</view>
+            <view class="cluster-line">{{item.breed}} · {{item.dateShort || item.date}}</view>
+            <view wx:if="{{item.place}}" class="cluster-line">{{item.place}}</view>
+          </view>
+          <view class="cluster-arrow">›</view>
+        </view>
+        <view class="sheet-foot-space"></view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- 底栏：卡片式预览，多只可左右滑切换整张卡 -->
+  <view wx:if="{{bubble && !showSettings && !detailCard && !clusterSheet}}" class="bubble-dock">
+    <block wx:if="{{bubbleGroup && bubbleGroup.count > 1}}">
+      <view class="bubble-dock-head">
+        <text class="bubble-dock-title">这里有 {{bubbleGroup.count}} 只猫</text>
+        <text class="bubble-dock-page">{{bubbleGroup.index + 1}} / {{bubbleGroup.count}}</text>
+      </view>
+      <swiper
+        class="bubble-swiper"
+        current="{{bubbleGroup.index}}"
+        previous-margin="48rpx"
+        next-margin="48rpx"
+        bindchange="onBubbleSwiperChange"
+      >
+        <swiper-item wx:for="{{bubbleGroup.items}}" wx:key="id">
+          <view
+            class="bubble-slide {{bubbleGroup.index === index ? 'bubble-slide-on' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="onBubbleCardTap"
+          >
+            <view class="bubble-slide-thumb">
+              <image wx:if="{{item.image}}" class="bubble-slide-img" src="{{item.image}}" mode="aspectFit" />
+              <view wx:else class="bubble-slide-img bubble-img-empty">猫</view>
+            </view>
+            <view class="bubble-slide-meta">
+              <view class="bubble-breed">{{item.name}}</view>
+              <view class="bubble-sub">{{item.breed}}</view>
+              <view class="bubble-sub">{{item.dateShort || item.date}}</view>
+              <view wx:if="{{item.place}}" class="bubble-sub">{{item.place}}</view>
+              <view class="bubble-hint">轻触查看详情</view>
+            </view>
+          </view>
+        </swiper-item>
+      </swiper>
+    </block>
+    <view wx:else class="bubble-slide bubble-slide-single" bindtap="onBubble">
+      <view class="bubble-slide-thumb">
+        <image wx:if="{{bubble.image}}" class="bubble-slide-img" src="{{bubble.image}}" mode="aspectFit" />
+        <view wx:else class="bubble-slide-img bubble-img-empty">猫</view>
+      </view>
+      <view class="bubble-slide-meta">
+        <view class="bubble-breed">{{bubble.name}}</view>
+        <view class="bubble-sub">{{bubble.breed}} · {{bubble.date}}</view>
+        <view wx:if="{{bubble.place}}" class="bubble-sub">{{bubble.place}}</view>
+        <view wx:if="{{bubble.pending}}" class="bubble-tag">审核中 · {{bubble.pendingBreed}}</view>
+        <view class="bubble-hint">轻触查看相遇详情</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 相遇快照详情：留在地图上下文，不跳页 -->
+  <view wx:if="{{detailCard}}" class="detail-mask" catchtouchmove="noop" bindtap="onCloseDetail">
+    <view class="detail-card" catchtap="noop">
+      <scroll-view scroll-y class="detail-scroll" enhanced show-scrollbar="{{false}}">
+        <view class="detail-stage">
+          <view class="detail-stage-glow"></view>
+          <image
+            wx:if="{{detailCard.image}}"
+            class="detail-hero"
+            src="{{detailCard.image}}"
+            mode="aspectFit"
+          />
+          <view wx:else class="detail-hero-empty">暂无照片</view>
+        </view>
+
+        <view class="detail-body">
+          <view class="detail-head">
+            <view class="detail-name">{{detailCard.name}}</view>
+            <view class="detail-breed-line">{{detailCard.breed}}</view>
+            <view wx:if="{{detailCard.pending}}" class="bubble-tag">审核中 · {{detailCard.pendingBreed}}</view>
+          </view>
+
+          <view class="detail-grid">
+            <view class="detail-cell">
+              <view class="detail-cell-k">相遇时间</view>
+              <view class="detail-cell-v">{{detailCard.date}}</view>
+            </view>
+            <view class="detail-cell">
+              <view class="detail-cell-k">相遇地点</view>
+              <view class="detail-cell-v">{{detailCard.place || '未填写地点'}}</view>
+            </view>
+            <view class="detail-cell">
+              <view class="detail-cell-k">识别结果</view>
+              <view class="detail-cell-v">{{detailCard.recognizedBreed || '暂无'}}{{detailCard.confidence ? ' · ' + detailCard.confidence + '%' : ''}}</view>
+            </view>
+            <view class="detail-cell">
+              <view class="detail-cell-k">记忆</view>
+              <view class="detail-cell-v">{{detailCard.memoryCount}} 条</view>
+            </view>
+          </view>
+
+          <view wx:if="{{detailCard.geoLabel}}" class="detail-geo">位置已记录 · {{detailCard.geoLabel}}</view>
+          <view wx:if="{{detailCard.note}}" class="detail-note">{{detailCard.note}}</view>
+          <view wx:elif="{{detailCard.mattingFailed}}" class="detail-note">抠图不完整，相遇记录仍保留</view>
+
+          <view
+            wx:if="{{detailCard.canOpenArchive}}"
+            class="detail-archive"
+            catchtap="onOpenArchive"
+          >打开档案</view>
+          <view class="detail-foot">轻触外侧关闭</view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <view wx:if="{{showSettings}}" class="sheet-mask" catchtouchmove="noop" bindtap="onCloseSettings">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-handle"></view>
+      <view class="sheet-head">
+        <view class="sheet-title">地图设置</view>
+        <view class="sheet-reset" bindtap="onResetSettings">恢复默认</view>
+      </view>
+      <view class="sheet-note">只调地图表现；个性化底图配色需付费开通</view>
+
+      <scroll-view scroll-y class="sheet-scroll" enhanced show-scrollbar="{{false}}">
+        <block wx:for="{{settingGroups}}" wx:key="id">
+          <view class="group-title">{{item.title}}</view>
+          <block wx:for="{{item.options}}" wx:for-item="opt" wx:key="key">
+            <view
+              wx:if="{{opt.type === 'toggle'}}"
+              class="opt-row"
+              data-key="{{opt.key}}"
+              bindtap="onToggleSetting"
+            >
+              <view class="opt-meta">
+                <view class="opt-name">{{opt.name}}</view>
+                <view class="opt-desc">{{opt.desc}}</view>
+              </view>
+              <view class="switch {{mapSetting[opt.key] ? 'switch-on' : ''}}">
+                <view class="switch-knob"></view>
+              </view>
+            </view>
+
+            <view wx:else class="range-row">
+              <view class="range-head">
+                <text class="opt-name">{{opt.name}}</text>
+                <text class="range-val">{{mapSetting[opt.key]}}</text>
+              </view>
+              <view class="opt-desc">{{opt.desc}}</view>
+              <view class="range-btns">
+                <view class="range-btn" data-key="{{opt.key}}" data-dir="-1" data-step="{{opt.step}}" bindtap="onNudgeSetting">−</view>
+                <slider
+                  class="range-slider"
+                  min="{{opt.min}}"
+                  max="{{opt.max}}"
+                  step="{{opt.step}}"
+                  value="{{mapSetting[opt.key]}}"
+                  activeColor="#2fd074"
+                  backgroundColor="#e8eef5"
+                  block-size="20"
+                  data-key="{{opt.key}}"
+                  bindchanging="onSlideSetting"
+                  bindchange="onSlideSetting"
+                />
+                <view class="range-btn" data-key="{{opt.key}}" data-dir="1" data-step="{{opt.step}}" bindtap="onNudgeSetting">+</view>
+              </view>
+            </view>
+          </block>
+        </block>
+        <view class="sheet-foot-space"></view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+</view>

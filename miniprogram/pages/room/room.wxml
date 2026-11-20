@@ -1,0 +1,337 @@
+<view class="room {{ready ? (hasDisplay ? 'room-has' : 'room-empty') : ''}} {{decorMode ? 'room-decor' : ''}} {{currentBgId === 'night_lamp' ? 'room-night' : ''}}">
+  <view class="nav-bar" style="padding-top: {{statusBar}}px; height: {{navBarHeight}}px;">
+    <view class="nav-inner" style="height: {{navHeight}}px;">
+      <text class="nav-title" bindlongpress="onToggleDebugUi">{{decorMode ? '摆一摆家具' : '我的小屋'}}</text>
+    </view>
+  </view>
+  <view
+    wx:if="{{showDebugUi}}"
+    class="debug-btn"
+    style="top: {{debugTop}}px;"
+    bindtap="onToggleDebug"
+  >{{debugLabel}}</view>
+
+  <view class="page-body" style="padding-top: {{navPad}}px;">
+    <!-- 无展示猫（且没人外出） -->
+    <block wx:if="{{ready && !hasDisplay && !catAway}}">
+      <view class="empty-page">
+        <view class="empty-center">
+          <image class="empty-illus" src="/assets/illus/empty-room-cats.png" mode="aspectFit" />
+          <view class="empty-tip">还没有展示的猫</view>
+          <view class="empty-sub" bindtap="onGoAlbum">去图鉴里选一只放进小屋吧</view>
+        </view>
+      </view>
+    </block>
+
+    <!-- 有展示 / 出门中：沉浸式全幅场景 -->
+    <block wx:elif="{{ready}}">
+      <view class="stage">
+        <view
+          class="scene scene-{{currentBgId}}"
+          style="background: {{sceneBg}};"
+          bindtap="onSceneTap"
+        >
+          <view class="scene-wall"></view>
+          <view class="scene-shelf"></view>
+          <view class="scene-floor"></view>
+          <view class="scene-baseboard"></view>
+          <view class="scene-rug"></view>
+          <view class="scene-sunbeam"></view>
+          <view class="scene-ambient"></view>
+          <view wx:if="{{decorMode}}" class="decor-hint">拖家具摆位置</view>
+
+          <!-- 外出标识：带头像，一眼能看出是谁出门了 -->
+          <view wx:if="{{catAway}}" class="away-plaque" catchtap="onAwayTap">
+            <view class="away-plaque-avatar">
+              <image
+                wx:if="{{awayCatImage}}"
+                class="away-plaque-img"
+                src="{{awayCatImage}}"
+                mode="aspectFit"
+              />
+              <view wx:else class="away-plaque-silhouette"></view>
+            </view>
+            <view class="away-plaque-body">
+              <view class="away-plaque-row">
+                <text class="away-plaque-name">{{awayCatName}}</text>
+                <text class="away-plaque-badge">外出中</text>
+              </view>
+              <text class="away-plaque-sub">{{outHint}}</text>
+            </view>
+          </view>
+
+          <block wx:for="{{furniture}}" wx:key="id">
+            <view
+              wx:if="{{item.placed || decorMode}}"
+              class="furn furn-{{item.kind}} {{decorMode ? 'furn-edit' : ''}} {{!item.placed && decorMode ? 'furn-ghost' : ''}} {{dragId === item.id ? 'furn-drag' : ''}}"
+              style="left: {{item.x}}%; top: {{item.y}}%; width: {{item.w}}%; height: {{item.h}}%; z-index: {{item.z}};"
+              data-id="{{item.id}}"
+              catchtouchstart="onFurnStart"
+              catchtouchmove="onFurnMove"
+              catchtouchend="onFurnEnd"
+              catchtap="onFurnTap"
+            >
+              <view class="furn-body">
+                <block wx:if="{{item.kind === 'window'}}">
+                  <view class="fw-frame">
+                    <view class="fw-glass">
+                      <view class="fw-sky"></view>
+                      <view class="fw-cloud c1"></view>
+                      <view class="fw-cloud c2"></view>
+                    </view>
+                    <view class="fw-bar-v"></view>
+                    <view class="fw-bar-h"></view>
+                    <view class="fw-sill"></view>
+                  </view>
+                  <view class="fw-glow"></view>
+                </block>
+                <block wx:elif="{{item.kind === 'plant'}}">
+                  <view class="fp-leaf l1"></view>
+                  <view class="fp-leaf l2"></view>
+                  <view class="fp-leaf l3"></view>
+                  <view class="fp-pot"></view>
+                  <view class="fp-soil"></view>
+                </block>
+                <block wx:elif="{{item.kind === 'cushion'}}">
+                  <view class="fc-outer"></view>
+                  <view class="fc-rim"></view>
+                  <view class="fc-inner"></view>
+                  <view class="fc-pillow"></view>
+                </block>
+                <block wx:elif="{{item.kind === 'bowl'}}">
+                  <view class="fb-shadow"></view>
+                  <view class="fb-dish"></view>
+                  <view class="fb-food"></view>
+                  <view class="fb-shine"></view>
+                </block>
+                <block wx:elif="{{item.kind === 'toy'}}">
+                  <view class="ft-stick"></view>
+                  <view class="ft-string"></view>
+                  <view class="ft-ball"></view>
+                  <view class="ft-feather"></view>
+                </block>
+              </view>
+            </view>
+          </block>
+
+          <view
+            wx:if="{{hasDisplay}}"
+            class="cat-slot cat-main {{showRing && careCardId === displayCardId ? 'cat-active' : ''}} {{catMoving ? 'cat-moving' : ''}} {{catFacingLeft ? 'cat-face-left' : ''}}"
+            style="left: {{catX}}%; top: {{catY}}%; transition-duration: {{catMoveMs}}ms;"
+            catchtap="onPet"
+          >
+            <view class="pet-flip">
+              <image
+                class="pet-img pet-breathe"
+                src="{{displayImage}}"
+                mode="aspectFit"
+                binderror="onPetImgError"
+              />
+            </view>
+            <view wx:if="{{unreadBadge}}" class="report-dot" catchtap="onOpenReport"></view>
+            <view class="pet-name {{showRing ? 'pet-name-show' : ''}}">{{displayBreed}}</view>
+            <view wx:if="{{intimacyText}}" class="pet-bond {{showRing ? 'pet-name-show' : ''}}">{{intimacyText}}</view>
+          </view>
+
+          <!-- 同住：在家的另外几只 -->
+          <block wx:if="{{hasDisplay}}">
+            <view
+              wx:for="{{roomMates}}"
+              wx:key="id"
+              class="cat-slot cat-mate {{item.facingLeft ? 'cat-face-left' : ''}} {{item.moving ? 'cat-moving' : ''}} {{item.preview ? 'cat-mate-preview' : ''}} {{showRing && careCardId === item.id ? 'cat-active' : ''}}"
+              style="left: {{item.x}}%; top: {{item.y}}%; transition-duration: {{item.moveMs}}ms;"
+              data-id="{{item.id}}"
+              data-preview="{{item.preview}}"
+              catchtap="onMateTap"
+            >
+              <view class="pet-flip">
+                <image class="pet-img pet-breathe" src="{{item.image}}" mode="aspectFit" />
+              </view>
+              <view class="pet-name pet-name-show">{{item.name}}</view>
+            </view>
+          </block>
+
+          <view
+            wx:if="{{visitor}}"
+            class="visitor-slot {{showVisitorMenu ? 'visitor-active' : ''}}"
+            catchtap="onVisitorTap"
+          >
+            <view class="visitor-pet">
+              <image
+                wx:if="{{visitor.cutoutPath}}"
+                class="visitor-img"
+                src="{{visitor.cutoutPath}}"
+                mode="aspectFit"
+              />
+              <view wx:else class="visitor-silhouette"></view>
+            </view>
+            <view class="visitor-tag">{{visitor.fromReleased ? '流浪来访' : '来串门'}}</view>
+          </view>
+
+          <view wx:elif="{{leftTrace}}" class="left-trace" catchtap="onLeftTrace">
+            <view class="left-text">{{leftPawText}}</view>
+          </view>
+        </view>
+
+        <view wx:if="{{roomMateHint && hasDisplay && !catAway}}" class="mate-hint">{{roomMateHint}}</view>
+
+        <!-- HUD：弱状态 -->
+        <view wx:if="{{hasDisplay}}" class="needs-wrap">
+          <view
+            wx:if="{{!showCareDetail && !showRing}}"
+            class="needs-chip"
+            catchtap="onToggleCareDetail"
+          >
+            <view class="needs-dot" style="background: {{careHint.color}};"></view>
+            <text class="needs-chip-txt">{{careHint.label}} {{careHint.value}}</text>
+          </view>
+          <view wx:else class="needs-panel" catchtap="onToggleCareDetail">
+            <view wx:for="{{careBars}}" wx:key="key" class="need-row">
+              <text class="need-label">{{item.label}}</text>
+              <view class="need-track">
+                <view class="need-fill" style="width: {{item.value}}%; background: {{item.color}};"></view>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view class="tools">
+          <view class="icon-btn" bindtap="onFrame">
+            <view class="i-frame"></view>
+            <view wx:if="{{memoryCount > 0}}" class="dot">{{memoryCount}}</view>
+          </view>
+        </view>
+
+        <!-- 点猫：底部动作条 -->
+        <view wx:if="{{showRing && hasDisplay}}" class="care-dock" catchtap="noop">
+          <view
+            wx:for="{{ringActions}}"
+            wx:key="id"
+            class="care-chip"
+            data-action="{{item.id}}"
+            catchtap="onCareAction"
+          >{{item.label}}</view>
+          <view class="care-chip care-chip-alt" catchtap="onOpenProfile">档案</view>
+        </view>
+
+        <!-- 底边图标组：抬高避开自定义 Tab -->
+        <view class="stage-dock">
+          <view class="dock-tray">
+            <view class="dock-btn" bindtap="onVisitLog" aria-role="button" aria-label="猫猫出门记录">
+              <view class="i-log"></view>
+              <text class="dock-label">出门</text>
+            </view>
+            <view
+              wx:if="{{hasDisplay}}"
+              class="dock-btn {{decorMode ? 'dock-on' : ''}}"
+              bindtap="onToggleDecor"
+              aria-role="button"
+              aria-label="摆家具"
+            >
+              <view class="i-decor"></view>
+              <text class="dock-label">家具</text>
+            </view>
+            <view class="dock-btn" bindtap="onChangeBg" aria-role="button" aria-label="换背景">
+              <view class="i-bg"></view>
+              <text class="dock-label">背景</text>
+            </view>
+            <view
+              wx:if="{{showDebugUi && debugFast}}"
+              class="dock-btn dock-debug"
+              bindtap="onDebugAdvance"
+            >
+              <text class="dock-debug-txt">推进</text>
+            </view>
+          </view>
+        </view>
+        <view class="stage-tab-veil"></view>
+      </view>
+    </block>
+
+    <!-- 空态仍保留底栏入口 -->
+    <view wx:if="{{ready && !hasDisplay}}" class="stage-dock stage-dock-empty">
+      <view class="dock-tray">
+        <view class="dock-btn" bindtap="onVisitLog" aria-role="button" aria-label="猫猫出门记录">
+          <view class="i-log"></view>
+          <text class="dock-label">出门</text>
+        </view>
+        <view class="dock-btn" bindtap="onChangeBg">
+          <view class="i-bg"></view>
+          <text class="dock-label">背景</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{showBgPanel}}" class="sheet-mask" bindtap="closeBg">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-handle"></view>
+      <view class="sheet-title">选择背景</view>
+      <view
+        wx:for="{{backgrounds}}"
+        wx:key="id"
+        class="bg-item {{item.unlocked ? '' : 'locked'}} {{item.id === currentBgId ? 'selected' : ''}}"
+        data-id="{{item.id}}"
+        data-unlocked="{{item.unlocked}}"
+        data-need="{{item.need}}"
+        bindtap="onPickBg"
+      >
+        <view class="bg-swatch" style="background: {{item.preview}};"></view>
+        <view class="bg-meta">
+          <view class="bg-name">{{item.name}}</view>
+          <view class="bg-cond">{{item.unlocked ? '已解锁' : item.lockText}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 访客互动 sheet -->
+  <view wx:if="{{showVisitorMenu && visitor}}" class="sheet-mask" bindtap="onCloseVisitorMenu">
+    <view class="sheet visitor-sheet" catchtap="noop">
+      <view class="sheet-handle"></view>
+      <view class="sheet-title">{{visitor.fromReleased ? '流浪来访' : '来串门的猫'}}</view>
+      <view class="visitor-sheet-line">{{visitor.distanceLabel}}</view>
+      <view class="visitor-sheet-line">{{visitor.behaviorText}}</view>
+      <view class="visitor-sheet-ops">
+        <button
+          class="v-btn {{visitor.petByHost ? 'v-done' : ''}}"
+          disabled="{{visitor.petByHost}}"
+          data-action="pet"
+          catchtap="onInteract"
+        >{{visitor.petByHost ? btnPetted : btnPet}}</button>
+        <button
+          class="v-btn {{visitor.fedByHost ? 'v-done' : ''}}"
+          disabled="{{visitor.fedByHost}}"
+          data-action="feed"
+          catchtap="onInteract"
+        >{{visitor.fedByHost ? btnFedDone : btnFed}}</button>
+        <button
+          wx:if="{{visitor.canAdopt}}"
+          class="v-btn v-adopt"
+          catchtap="onAdoptVisitor"
+        >收养它</button>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{showReport}}" class="sheet-mask center" catchtouchmove="noop">
+    <view class="dialog">
+      <view class="dialog-title">{{report.title}}</view>
+      <view class="dialog-line">{{report.distanceLine}}</view>
+      <view class="dialog-line">{{report.behaviorLine}}</view>
+      <view class="dialog-line">{{report.interactLine}}</view>
+      <button class="btn-primary" bindtap="onDismissReport">{{btnOk}}</button>
+    </view>
+  </view>
+
+  <view wx:if="{{showLeftModal}}" class="sheet-mask center" catchtouchmove="noop">
+    <view class="dialog">
+      <view class="dialog-title">{{leftTitle}}</view>
+      <view class="dialog-line">{{leftBody}}</view>
+      <view class="dialog-line">{{leftBehavior}}</view>
+      <button class="btn-primary" bindtap="onDismissLeft">{{btnOk}}</button>
+    </view>
+  </view>
+
+  <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+</view>

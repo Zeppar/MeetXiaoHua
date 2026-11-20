@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "遇见一只猫",
+  "usingComponents": {
+    "text-modal": "/components/text-modal/text-modal"
+  }
+}

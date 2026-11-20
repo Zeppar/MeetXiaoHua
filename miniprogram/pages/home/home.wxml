@@ -1,0 +1,74 @@
+<view class="home">
+  <!-- Hero：插画下移对齐 PetMeet，标题留在天空区 -->
+  <view class="hero">
+    <image class="hero-img" src="/assets/illus/hero-globe.jpg" mode="aspectFill" />
+    <view class="hero-top" style="padding-top: {{statusBar}}px;">
+      <view class="top-nav" style="min-height: {{navHeight}}px;">
+        <image
+          class="brand-logo"
+          src="/assets/illus/brand-logo.png"
+          mode="aspectFit"
+          aria-label="遇见小花猫"
+        />
+      </view>
+      <view class="hero-online">已记录 {{recentCount}} 次相遇</view>
+    </view>
+    <view class="hero-slogan">快去寻找你的小猫吧</view>
+  </view>
+
+  <!-- 底部内容卡片层：与顶部天空分割 -->
+  <view class="sheet">
+    <view class="cards-2">
+      <view class="card-lg" bindtap="onMeet">
+        <image class="card-img" src="/assets/illus/card-meet.jpg" mode="aspectFill" />
+        <view class="pill">
+          <text class="pill-txt">遇见一只猫</text>
+          <view class="pill-go">›</view>
+        </view>
+      </view>
+      <view class="card-lg" bindtap="onRoom">
+        <image class="card-img" src="/assets/illus/card-room.jpg" mode="aspectFill" />
+        <view class="pill">
+          <text class="pill-txt">我的小屋</text>
+          <view class="pill-go">›</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="cards-3">
+      <view class="card-sm" bindtap="onAlbum">
+        <image class="card-img mascot-cover" src="/assets/illus/mascot.png" mode="aspectFill" />
+        <view class="pill sm">
+          <text class="pill-txt">图鉴</text>
+          <view class="pill-go">›</view>
+        </view>
+      </view>
+      <view class="card-sm" bindtap="onMap">
+        <image class="card-img" src="/assets/illus/mini-map.jpg" mode="aspectFill" />
+        <view class="pill sm">
+          <text class="pill-txt">足迹</text>
+          <view class="pill-go">›</view>
+        </view>
+      </view>
+      <view class="card-sm" bindtap="onOuting">
+        <image class="card-img" src="/assets/illus/mini-outing.jpg" mode="aspectFill" />
+        <view class="pill sm">
+          <text class="pill-txt">出门</text>
+          <view class="pill-go">›</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 隐私弹窗 -->
+  <view wx:if="{{showPrivacy}}" class="mask" catchtouchmove="noop">
+    <view class="dialog">
+      <view class="dialog-title">{{privacyTitle}}</view>
+      <view class="dialog-body">{{privacyBody}}</view>
+      <navigator url="/pages/privacy/privacy" class="dialog-link">查看完整隐私政策</navigator>
+      <button class="btn-primary" bindtap="onAgreePrivacy">同意并继续</button>
+    </view>
+  </view>
+
+  <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+</view>

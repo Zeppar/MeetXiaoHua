@@ -1,0 +1,71 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/album/album",
+    "pages/room/room",
+    "pages/profile/profile",
+    "pages/camera/camera",
+    "pages/card-detail/card-detail",
+    "pages/memory/memory",
+    "pages/map/map",
+    "pages/privacy/privacy",
+    "pages/about/about",
+    "pages/settings/settings",
+    "pages/outing-history/outing-history",
+    "pages/released/released",
+    "pages/visit-log/visit-log",
+    "pages/breed-review/breed-review"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#F5F7FA",
+    "navigationBarTitleText": "遇见小花猫",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F5F7FA",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#8B95A5",
+    "selectedColor": "#22C26A",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "首页",
+        "iconPath": "assets/tab/home.png",
+        "selectedIconPath": "assets/tab/home-active.png"
+      },
+      {
+        "pagePath": "pages/album/album",
+        "text": "图鉴",
+        "iconPath": "assets/tab/album.png",
+        "selectedIconPath": "assets/tab/album-active.png"
+      },
+      {
+        "pagePath": "pages/room/room",
+        "text": "小屋",
+        "iconPath": "assets/tab/room.png",
+        "selectedIconPath": "assets/tab/room-active.png"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的",
+        "iconPath": "assets/tab/profile.png",
+        "selectedIconPath": "assets/tab/profile-active.png"
+      }
+    ]
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于在你同意时填写模糊地点，仅自己可见"
+    }
+  },
+  "requiredPrivateInfos": [
+    "getLocation"
+  ],
+  "sitemapLocation": "sitemap.json",
+  "usingComponents": {
+    "cat-loading": "/components/cat-loading/cat-loading"
+  }
+}

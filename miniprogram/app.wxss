@@ -1,0 +1,91 @@
+page {
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-title: #1f2430;
+  --color-text: #3d4654;
+  --color-muted: #8b95a5;
+  --color-primary: #2fd074;
+  --color-primary-deep: #22c26a;
+  --color-sky: #4da3ff;
+  --color-border: rgba(120, 140, 170, 0.14);
+  --shadow-card: 0 16rpx 36rpx rgba(70, 100, 140, 0.12);
+  --radius-xl: 36rpx;
+  --radius-lg: 28rpx;
+  --font-body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 28rpx;
+  line-height: 1.5;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 24rpx 28rpx calc(220rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: #f5f7fa;
+}
+
+.title-brand {
+  font-size: 44rpx;
+  color: var(--color-title);
+  font-weight: 800;
+  text-align: center;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #5aef9a 0%, #2fd074 100%);
+  color: #102418;
+  border-radius: 999rpx;
+  padding: 26rpx 48rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  text-align: center;
+  border: none;
+  box-shadow: 0 14rpx 28rpx rgba(47, 208, 116, 0.28);
+}
+
+.btn-primary::after {
+  border: none;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-title);
+  border-radius: 999rpx;
+  padding: 22rpx 40rpx;
+  font-size: 28rpx;
+  border: 2rpx solid var(--color-border);
+  font-weight: 600;
+}
+
+.btn-secondary::after {
+  border: none;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 28rpx;
+  padding: 16rpx 24rpx;
+}
+
+.btn-ghost::after {
+  border: none;
+}
+
+.muted {
+  color: var(--color-muted);
+  font-size: 24rpx;
+}
+
+.section-gap {
+  margin-top: 36rpx;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}

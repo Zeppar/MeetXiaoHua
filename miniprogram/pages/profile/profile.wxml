@@ -1,0 +1,63 @@
+<view class="page profile">
+  <view class="hero-card">
+    <image class="hero-deco" src="/assets/illus/mini-album.jpg" mode="aspectFill" />
+    <view class="hero-mask"></view>
+    <view class="hero-content">
+      <view class="avatar">{{avatarLetter}}</view>
+      <view class="nickname">{{nickName}}</view>
+      <view class="hero-tip">记录生活里的猫瞬间</view>
+    </view>
+  </view>
+
+  <view class="stats">
+    <view class="stat">
+      <view class="stat-num">{{stats.cardCount}}</view>
+      <view class="stat-label">已记录</view>
+    </view>
+    <view class="stat-line"></view>
+    <view class="stat">
+      <view class="stat-num">{{stats.breedCount}}</view>
+      <view class="stat-label">遇见品种</view>
+    </view>
+    <view class="stat-line"></view>
+    <view class="stat">
+      <view class="stat-num">{{stats.memoryCount}}</view>
+      <view class="stat-label">留下记忆</view>
+    </view>
+  </view>
+
+  <view class="menu">
+    <view class="menu-item" bindtap="onBreedReview">
+      <view class="menu-ico out"></view>
+      <view class="menu-txt">品种审核</view>
+      <view class="menu-arrow">›</view>
+    </view>
+    <view class="menu-item" bindtap="onVisitLog">
+      <view class="menu-ico out"></view>
+      <view class="menu-txt">猫猫出门记录</view>
+      <view class="menu-arrow">›</view>
+    </view>
+    <view class="menu-item" bindtap="onReleased">
+      <view class="menu-ico out"></view>
+      <view class="menu-txt">我放生的猫</view>
+      <view class="menu-arrow">›</view>
+    </view>
+    <view class="menu-item" bindtap="onPrivacy">
+      <view class="menu-ico privacy"></view>
+      <view class="menu-txt">隐私政策</view>
+      <view class="menu-arrow">›</view>
+    </view>
+    <view class="menu-item" bindtap="onAbout">
+      <view class="menu-ico about"></view>
+      <view class="menu-txt">关于</view>
+      <view class="menu-arrow">›</view>
+    </view>
+    <button class="menu-item menu-btn" open-type="feedback">
+      <view class="menu-ico feedback"></view>
+      <view class="menu-txt">意见反馈</view>
+      <view class="menu-arrow">›</view>
+    </button>
+  </view>
+
+  <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+</view>

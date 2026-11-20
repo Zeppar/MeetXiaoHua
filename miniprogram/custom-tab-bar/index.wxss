@@ -1,0 +1,218 @@
+.dock-wrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  padding: 0 40rpx calc(22rpx + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.dock-wrap.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.dock {
+  pointer-events: auto;
+  height: 128rpx;
+  border-radius: 999rpx;
+  overflow: visible;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 228, 214, 0.36) 55%,
+    rgba(220, 245, 235, 0.34) 100%
+  );
+  box-shadow:
+    0 18rpx 44rpx rgba(80, 100, 130, 0.16),
+    inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+  border: 1rpx solid rgba(255, 255, 255, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 12rpx;
+  backdrop-filter: blur(36px) saturate(160%);
+  -webkit-backdrop-filter: blur(36px) saturate(160%);
+}
+
+.item {
+  width: 88rpx;
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1f2430;
+  opacity: 0.72;
+  overflow: visible;
+}
+
+.item.on {
+  color: #2fd074;
+  opacity: 1;
+}
+
+.ico {
+  width: 44rpx;
+  height: 44rpx;
+  position: relative;
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+/* 线框房子 */
+.ico-home::before {
+  content: '';
+  position: absolute;
+  left: 7rpx;
+  top: 16rpx;
+  width: 28rpx;
+  height: 20rpx;
+  border: 3rpx solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 5rpx 5rpx;
+  box-sizing: border-box;
+}
+.ico-home::after {
+  content: '';
+  position: absolute;
+  left: 3rpx;
+  top: 4rpx;
+  width: 0;
+  height: 0;
+  border-left: 18rpx solid transparent;
+  border-right: 18rpx solid transparent;
+  border-bottom: 15rpx solid currentColor;
+}
+
+/* 爪印：用实体节点绘制，避免 box-shadow 在毛玻璃上泛白边 */
+.ico-paw .paw-pad,
+.ico-paw .paw-toe {
+  position: absolute;
+  background: currentColor;
+}
+
+.ico-paw .paw-pad {
+  left: 10rpx;
+  top: 22rpx;
+  width: 24rpx;
+  height: 18rpx;
+  border-radius: 48% 48% 50% 50%;
+}
+
+.ico-paw .paw-toe {
+  width: 9rpx;
+  height: 10rpx;
+  border-radius: 50%;
+}
+
+.ico-paw .toe1 {
+  left: 5rpx;
+  top: 10rpx;
+}
+
+.ico-paw .toe2 {
+  left: 13rpx;
+  top: 4rpx;
+}
+
+.ico-paw .toe3 {
+  left: 23rpx;
+  top: 4rpx;
+}
+
+.ico-paw .toe4 {
+  left: 31rpx;
+  top: 10rpx;
+}
+
+/* 消息气泡 */
+.ico-msg::before {
+  content: '';
+  position: absolute;
+  left: 4rpx;
+  top: 5rpx;
+  width: 32rpx;
+  height: 24rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 14rpx;
+  box-sizing: border-box;
+}
+.ico-msg::after {
+  content: '';
+  position: absolute;
+  left: 12rpx;
+  bottom: 2rpx;
+  width: 0;
+  height: 0;
+  border-left: 7rpx solid transparent;
+  border-right: 7rpx solid transparent;
+  border-top: 9rpx solid currentColor;
+}
+
+/* 我的 */
+.ico-me::before {
+  content: '';
+  position: absolute;
+  left: 13rpx;
+  top: 2rpx;
+  width: 15rpx;
+  height: 15rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.ico-me::after {
+  content: '';
+  position: absolute;
+  left: 6rpx;
+  top: 21rpx;
+  width: 28rpx;
+  height: 14rpx;
+  border: 3rpx solid currentColor;
+  border-bottom: 0;
+  border-radius: 14rpx 14rpx 0 0;
+  box-sizing: border-box;
+}
+
+.plus-wrap {
+  width: 120rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plus {
+  width: 108rpx;
+  height: 108rpx;
+  margin-top: -10rpx;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #6af0a4 0%, #2fd074 100%);
+  box-shadow:
+    0 14rpx 28rpx rgba(47, 208, 116, 0.36),
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.45);
+  border: 7rpx solid rgba(255, 255, 255, 0.92);
+  position: relative;
+  box-sizing: border-box;
+}
+
+.plus-h,
+.plus-v {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: #14261a;
+  border-radius: 6rpx;
+  transform: translate(-50%, -50%);
+}
+
+.plus-h {
+  width: 34rpx;
+  height: 6rpx;
+}
+
+.plus-v {
+  width: 6rpx;
+  height: 34rpx;
+}

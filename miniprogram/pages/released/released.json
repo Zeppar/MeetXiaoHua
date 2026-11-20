@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "我放生的猫",
+  "usingComponents": {
+    "empty-state": "/components/empty-state/empty-state"
+  }
+}

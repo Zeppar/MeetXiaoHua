@@ -1,0 +1,33 @@
+<view class="page released">
+  <view class="head">
+    <view class="head-title">我放生的猫</view>
+    <view class="head-sub">看看它们还在流浪，还是已有新家</view>
+  </view>
+
+  <view wx:if="{{ready && !empty}}" class="list">
+    <view wx:for="{{list}}" wx:key="_id" class="card">
+      <view class="card-media">
+        <image wx:if="{{item.displayImage}}" class="card-img" src="{{item.displayImage}}" mode="aspectFit" />
+        <view wx:else class="card-ph"></view>
+      </view>
+      <view class="card-body">
+        <view class="card-name">{{item.displayName}}</view>
+        <view class="card-meta">放生 · {{item.dateLabel}}</view>
+        <view class="card-meta" wx:if="{{item.breed}}">品种 {{item.breed}}</view>
+        <view class="status status-{{item.statusTone}}">{{item.statusLabel}}</view>
+        <view wx:if="{{item.statusTone === 'adopted' && item.adoptLabel}}" class="card-meta muted">
+          {{item.adoptLabel}} 找到新家
+        </view>
+        <view wx:elif="{{item.visitCount > 0}}" class="card-meta muted">
+          已串门 {{item.visitCount}} 次
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:elif="{{ready}}" class="empty-card">
+    <empty-state main="还没有放生过小猫" sub="在图鉴里可以放它去外面走走" />
+  </view>
+
+  <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+</view>

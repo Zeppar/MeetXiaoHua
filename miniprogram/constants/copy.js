@@ -1,0 +1,98 @@
+/** 产品文案库 */
+module.exports = {
+  brand: '遇见小花猫',
+  buttons: {
+    meetCat: '📷 遇见一只猫',
+    saveAlbum: '保存到图鉴',
+    retake: '重拍',
+    retakeAgain: '重新拍照',
+    retry: '重试',
+    editNote: '编辑备注',
+    memoryCorner: '记忆角',
+    setDisplay: '放入小屋',
+    removeFromRoom: '移出小屋',
+    releaseCat: '放生',
+    changeBg: '换背景',
+    decor: '摆家具',
+    decorDone: '完成摆放',
+    goFirstCat: '去拍第一只猫',
+    addMemory: '添加记忆',
+    addFirstMemory: '添加第一条记忆',
+    goSettings: '去设置',
+    notNow: '暂不',
+    skip: '跳过',
+    save: '保存',
+    done: '完成',
+    goShoot: '去拍猫',
+    backHome: '返回首页'
+  },
+  tips: {
+    recognizing: '正在抠图，品种识别并行中…',
+    unclear: '没看清，靠近一点再拍一张',
+    noCat: '找不到猫咪',
+    headOnly: '请拍到猫咪的身体，不要只拍头',
+    tooFar: '离近一点，把猫咪身体拍完整',
+    recognizeFail: '识别失败了，请检查网络后重试',
+    setDisplayOk: '已放入小屋',
+    removeFromRoomOk: '已移出小屋',
+    roomFull: '小屋已满（最多3只），请先移出一只再放进来',
+    releaseOk: '它自由了。以后也许会去别人家串门。',
+    releaseConfirmTitle: '放生这只猫？',
+    releaseConfirmBody: '放生后它会离开你的图鉴，可能流浪到别的小屋串门。记忆还会留着，但小屋里见不到它了。',
+    breedReviewHint: '改品种都需审核，通过后才会生效',
+    breedReviewPending: '已提交审核，通过后才会更换',
+    switchBgOk: '已切换背景',
+    noDisplayCat: '还没有设置展示的猫，去图鉴里选一只吧',
+    frameNeedCat: '先选一只猫展示吧',
+    unlockBg: (n) => `再遇见 ${n} 个不同品种就能解锁`,
+    unlockBgProgress: (have, need) => `已有 ${have} 个品种，满 ${need} 个可换`,
+    networkCache: '网络不太好，正在显示上次的记录',
+    shootHint: '拍清楚猫咪的脸和身体哦',
+    longPressSave: '长按可以保存这张卡哦',
+    privacyOnlyYou: '会用当前位置记下足迹（模糊到街区），只有你自己能看到。不开定位无法保存。',
+    locating: '正在获取相遇位置…',
+    locationReady: '已记录当前位置',
+    locationRequired: '需要开启定位才能保存这只猫',
+    mattingFailed: '（背景没抠干净，已用原图生成）',
+    unknownHint: '这是一只小动物，但没认出具体品种',
+    pageLoading: '猫猫正在赶来…'
+  },
+  empty: {
+    homeMain: '还没有遇见猫，出门走走吧',
+    homeSub: '散步时留意一下街角，也许会遇到它',
+    albumMain: '还没有记录',
+    memoryMain: '还没有关于它的记忆',
+    memorySub: '记录一些和它有关的小事吧，比如它第一次蹭你的时候',
+    mapMain: '还没有留下足迹',
+    mapSub: '拍猫时会自动记下相遇位置，只有你能看见'
+  },
+  modals: {
+    nameTitle: '给它起个名字',
+    namePlaceholder: '比如：小花、橘子、团子',
+    noteTitle: '给这次相遇留句话吧',
+    notePlaceholder: '比如：蹲在便利店门口，不怕人',
+    placeTitle: '在哪里遇到的它？',
+    placePlaceholder: '比如：小区楼下、公司附近（可选）',
+    useLocation: '📍 重新获取定位',
+    locationTitle: '需要位置权限',
+    locationBody:
+      '足迹地图要记下相遇位置，才能把猫放上地图。不开定位就无法保存这只猫。请在设置里开启位置权限后重试。',
+    cameraTitle: '需要相机权限',
+    cameraBody: '遇见小花猫需要使用相机来拍摄你遇到的猫。你可以在设置里开启相机权限。',
+    deleteMemory: '删除这条记忆？',
+    privacyTitle: '隐私保护提示',
+    privacyBody:
+      '遇见小花猫会在你拍照时使用相机；保存猫咪时需要位置权限以记录相遇足迹（会模糊到街区，只有你自己能看到）。详情请阅读完整隐私政策。'
+  },
+  pages: {
+    album: '我的猫猫记录',
+    memory: '和它的记忆',
+    map: '我的足迹'
+  },
+  limits: {
+    name: 12,
+    note: 100,
+    memory: 200,
+    place: 30
+  }
+}

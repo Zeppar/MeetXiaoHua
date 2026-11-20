@@ -1,0 +1,8 @@
+{
+  "navigationStyle": "custom",
+  "disableScroll": true,
+  "usingComponents": {
+    "empty-state": "/components/empty-state/empty-state",
+    "card-thumb": "/components/card-thumb/card-thumb"
+  }
+}

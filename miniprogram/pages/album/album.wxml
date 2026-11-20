@@ -1,0 +1,179 @@
+<view class="album {{ready ? (hasCats ? 'album-split' : 'album-empty') : ''}}">
+  <!-- 标题放在导航主题栏，与胶囊对齐 -->
+  <view class="nav-bar" style="padding-top: {{statusBar}}px; height: {{navBarHeight}}px;">
+    <view class="nav-inner" style="height: {{navHeight}}px;">
+      <view class="nav-side nav-side-left" catchtap="onMap" aria-role="button" aria-label="足迹地图">
+        <view class="map-pin">
+          <view class="map-pin-head"></view>
+          <view class="map-pin-dot"></view>
+        </view>
+      </view>
+      <text class="nav-title">我的猫猫记录</text>
+      <view class="nav-side nav-side-right" catchtap="onReleased" aria-role="button" aria-label="我放生的猫">
+        <text class="nav-link">放生</text>
+      </view>
+    </view>
+  </view>
+  <view class="debug-btn" style="top: {{debugTop}}px;" bindtap="onToggleDebug">{{debugLabel}}</view>
+
+  <!-- 有猫：上固定展示，下滚动列表 -->
+  <block wx:if="{{ready && hasCats}}">
+    <view class="stage" style="padding-top: {{navPad}}px;">
+      <view wx:if="{{featured}}" class="bubble" catchtap="onEditName">
+        <text class="bubble-txt">喵，我是{{featured.displayName}}</text>
+        <text class="bubble-hint">点我改名</text>
+      </view>
+      <view class="stage-cat-wrap" bindtap="onOpenFeatured">
+        <image
+          wx:if="{{featured.stickerImage || featured.displayImage}}"
+          class="stage-cat {{featured.isSticker ? 'is-sticker' : ''}}"
+          src="{{featured.stickerImage || featured.displayImage}}"
+          mode="aspectFit"
+          binderror="onMediaError"
+          data-id="{{featured._id}}"
+          data-field="featured"
+        />
+        <view wx:else class="stage-cat-empty" catchtap="onFixMedia" data-id="{{featured._id}}">
+          <text class="stage-cat-empty-tip">图丢了，点此补图</text>
+        </view>
+        <view wx:if="{{featured.inRoom}}" class="stage-room-tag">在小屋</view>
+      </view>
+      <view class="stage-meta">
+        <text wx:if="{{featured.dateLabel}}">{{featured.dateLabel}}</text>
+        <text wx:if="{{featured.placeText}}">{{featured.dateLabel ? ' · ' : ''}}{{featured.placeText}}</text>
+      </view>
+      <view wx:if="{{featured}}" class="stage-actions">
+        <view class="stage-act" catchtap="onEditName">
+          <text class="stage-act-k">名字</text>
+          <text class="stage-act-v">{{featured.displayName || '未命名'}}</text>
+          <text class="stage-act-go">改</text>
+        </view>
+        <view
+          class="stage-act {{featured.breedPending ? 'stage-act-pending' : ''}}"
+          catchtap="onEditBreed"
+        >
+          <text class="stage-act-k">品种</text>
+          <text class="stage-act-v {{featured.breed === '待识别' || featured.breed === '未知小动物' || featured.breedPending ? 'is-warn' : ''}}">{{featured.breedPending ? ('申请·' + (featured.pendingBreed || '新品种')) : (featured.breed || '待识别')}}</text>
+          <text class="stage-act-go {{featured.breedPending ? 'is-pending' : ''}}">{{featured.breedPending ? '审核中' : '换'}}</text>
+        </view>
+        <view wx:if="{{featured.needMedia}}" class="stage-act stage-act-fix" catchtap="onFixMedia" data-id="{{featured._id}}">
+          <text class="stage-act-k">照片</text>
+          <text class="stage-act-v is-warn">还没有图</text>
+          <text class="stage-act-go">补</text>
+        </view>
+        <view
+          class="stage-act stage-act-release {{featured.breedPending ? 'stage-act-pending' : ''}}"
+          catchtap="onRelease"
+        >
+          <text class="stage-act-k">去向</text>
+          <text class="stage-act-v {{featured.breedPending ? 'is-warn' : ''}}">{{featured.breedPending ? '审核中不可放生' : '放生到外面'}}</text>
+          <text class="stage-act-go {{featured.breedPending ? 'is-pending' : ''}}">{{featured.breedPending ? '审核中' : '放'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="sheet sheet-pick">
+      <!-- 分类栏固定，不随列表滚动；仅横向滑动切换品种 -->
+      <scroll-view wx:if="{{filters.length}}" class="tabs" scroll-x enable-flex>
+        <view
+          wx:for="{{filters}}"
+          wx:key="breed"
+          class="tab {{(item.breed === '全部' ? !breedFilter : breedFilter === item.breed) ? 'tab-on' : ''}}"
+          data-breed="{{item.breed}}"
+          bindtap="onFilter"
+        >
+          <text class="tab-name">{{item.breed}}</text>
+          <view class="tab-line {{(item.breed === '全部' ? !breedFilter : breedFilter === item.breed) ? 'tab-line-on' : ''}}"></view>
+        </view>
+      </scroll-view>
+
+      <scroll-view
+        scroll-y
+        class="sheet-scroll"
+        enhanced
+        show-scrollbar="{{false}}"
+        enable-flex
+      >
+        <view class="grid-3">
+          <view
+            wx:for="{{cards}}"
+            wx:key="_id"
+            class="pick {{featuredId === item._id ? 'pick-on' : ''}}"
+            data-id="{{item._id}}"
+            bindtap="onPick"
+          >
+            <view class="pick-img-wrap">
+              <image
+                wx:if="{{item.displayImage}}"
+                class="pick-img {{item.isSticker ? 'is-sticker' : ''}}"
+                src="{{item.displayImage}}"
+                mode="{{item.isSticker ? 'aspectFit' : 'aspectFill'}}"
+                binderror="onMediaError"
+                data-id="{{item._id}}"
+                data-field="grid"
+              />
+              <view
+                wx:else
+                class="pick-placeholder pick-need-media"
+                catchtap="onFixMedia"
+                data-id="{{item._id}}"
+              >
+                <text class="pick-need-tip">补图</text>
+              </view>
+              <view wx:if="{{item.inRoom}}" class="pick-room-tag">{{item.roomBadge || '小屋'}}</view>
+            </view>
+            <view class="pick-name">{{item.displayName}}</view>
+          </view>
+        </view>
+        <view class="sheet-spacer"></view>
+      </scroll-view>
+    </view>
+  </block>
+
+  <!-- 无猫：居中空状态（参照清单空页布局，风格跟本应用统一） -->
+  <block wx:elif="{{ready}}">
+    <view class="empty-page" style="padding-top: {{navPad}}px;">
+      <view class="empty-center">
+        <image class="empty-illus" src="/assets/illus/empty-cat-house.png" mode="aspectFit" />
+        <view class="empty-tip">{{emptyTip}}</view>
+        <view class="empty-cta" bindtap="onGoShoot">
+          <view class="empty-cta-plus">+</view>
+          <text class="empty-cta-txt">{{goFirst}}</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+
+  <text-modal
+    show="{{showNameModal}}"
+    title="{{nameTitle}}"
+    placeholder="{{namePlaceholder}}"
+    value="{{editNameValue}}"
+    maxlength="{{nameMax}}"
+    mode="input"
+    cancel-text="取消"
+    confirm-text="保存"
+    bind:cancel="onNameCancel"
+    bind:confirm="onNameConfirm"
+  />
+
+  <view wx:if="{{showBreedPicker}}" class="breed-mask" catchtouchmove="noop" bindtap="onBreedCancel">
+    <view class="breed-sheet" catchtap="noop">
+      <view class="breed-sheet-hd">
+        <text class="breed-sheet-title">选择品种</text>
+        <text class="breed-sheet-close" bindtap="onBreedCancel">取消</text>
+      </view>
+      <scroll-view scroll-y class="breed-sheet-list">
+        <view
+          wx:for="{{breedOptions}}"
+          wx:key="*this"
+          class="breed-option {{featured.breed === item ? 'on' : ''}}"
+          data-breed="{{item}}"
+          bindtap="onPickBreed"
+        >{{item}}</view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

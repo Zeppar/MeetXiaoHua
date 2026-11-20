@@ -1,0 +1,10 @@
+<view class="thumb" bindtap="onTap">
+  <view class="thumb-img-wrap">
+    <image wx:if="{{image}}" class="thumb-img" src="{{image}}" mode="aspectFill" />
+    <view wx:else class="thumb-placeholder"></view>
+    <view wx:if="{{memoryCount > 0}}" class="badge">记 {{memoryCount}}</view>
+  </view>
+  <view class="thumb-breed">{{breed}}</view>
+  <view wx:if="{{date}}" class="thumb-date">{{date}}</view>
+  <view wx:if="{{place}}" class="thumb-place">{{place}}</view>
+</view>

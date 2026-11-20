@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "卡牌详情",
+  "usingComponents": {
+    "text-modal": "/components/text-modal/text-modal"
+  }
+}

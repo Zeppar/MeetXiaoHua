@@ -1,0 +1,149 @@
+<view class="detail-root">
+  <view class="page detail" wx:if="{{card}}">
+    <!-- 顶部展示台 -->
+    <view class="hero" bindlongpress="onLongPress" bindtap="onLongPress">
+      <view class="hero-sky"></view>
+      <view class="hero-glow"></view>
+      <view class="hero-floor"></view>
+      <image class="hero-img" src="{{displayImage}}" mode="aspectFit" />
+      <view wx:if="{{isInRoom}}" class="hero-chip hero-chip-room">{{roomTag || '在小屋'}}</view>
+      <view wx:elif="{{card.memoryCount > 0}}" class="hero-chip">记忆 {{card.memoryCount}}</view>
+      <view class="hero-hint">轻触查看大图</view>
+    </view>
+
+    <!-- 身份卡 -->
+    <view class="id-card">
+      <view class="name-row">
+        <text class="name">{{displayName}}</text>
+        <view class="name-edit" bindtap="onEditName">改名</view>
+      </view>
+
+      <view wx:if="{{intimacyText}}" class="bond-block">
+        <view class="bond-top">
+          <text class="bond-label">亲密度</text>
+          <text class="bond-text">{{intimacyText}}</text>
+        </view>
+        <view class="bond-track">
+          <view class="bond-fill" style="width: {{intimacyValue}}%;"></view>
+        </view>
+      </view>
+
+      <view class="breed-row {{breedPending ? 'is-pending' : ''}}" bindtap="onEditBreed">
+        <view class="breed-main">
+          <text class="breed-label">{{breedPending ? '品种审核中' : (needPickBreed ? '还未选定品种' : '品种')}}</text>
+          <text class="breed-value">{{breedPending ? ('申请·' + (pendingBreed || '新品种')) : (needPickBreed ? '点此选择' : card.breed)}}</text>
+        </view>
+        <text class="breed-action {{breedPending ? 'is-pending' : ''}}">{{breedPending ? '审核中' : (needPickBreed ? '选择' : '更换')}}</text>
+      </view>
+
+      <view wx:if="{{breedPending}}" class="tip-banner">
+        审核中不可再换品种{{recognizedBreed ? ' · 识别结果：' + recognizedBreed : ''}}
+      </view>
+      <view wx:if="{{breedPending}}" class="breed-review-row">
+        <button class="btn-ghost" bindtap="onApproveBreed">通过审核（调试）</button>
+      </view>
+
+      <view class="meta-chips">
+        <view wx:if="{{showConfidence}}" class="chip">置信度 {{card.confidence}}%</view>
+        <view wx:if="{{shotLabel}}" class="chip">{{shotLabel}}</view>
+        <view wx:if="{{card.placeText}}" class="chip">{{card.placeText}}</view>
+      </view>
+
+      <view wx:if="{{card.mattingFailed}}" class="tip-banner tip-warn">{{mattingFailed}}</view>
+      <view wx:if="{{card.note}}" class="note">{{card.note}}</view>
+    </view>
+
+    <!-- 入口 -->
+    <view class="section-title">相遇与回忆</view>
+    <view class="links">
+      <view class="link" bindtap="onMemory">
+        <view class="link-ico mem">
+          <view class="ico-spark"></view>
+        </view>
+        <view class="link-body">
+          <text class="link-title">记忆角</text>
+          <text class="link-desc">{{card.memoryCount || 0}} 条记忆</text>
+        </view>
+        <text class="link-arrow">›</text>
+      </view>
+      <view class="link" bindtap="onOutingHistory">
+        <view class="link-ico out">
+          <view class="ico-paw"></view>
+        </view>
+        <view class="link-body">
+          <text class="link-title">出门记录</text>
+          <text class="link-desc">{{outingEntry}}</text>
+        </view>
+        <text class="link-arrow">›</text>
+      </view>
+    </view>
+
+    <!-- 操作 -->
+    <view class="actions">
+      <view class="actions-row">
+        <button class="btn-soft btn-half" bindtap="onEditNote">{{editNote}}</button>
+        <button class="btn-soft btn-half" bindtap="onMemory">{{memoryBtn}}</button>
+      </view>
+      <button wx:if="{{!isInRoom}}" class="btn-primary btn-room" bindtap="onAddToRoom">{{setDisplay}}</button>
+      <block wx:else>
+        <view class="room-status">
+          <view class="room-status-dot"></view>
+          <text>{{roomTag || '在小屋里'}}</text>
+        </view>
+        <button class="btn-soft" bindtap="onRemoveFromRoom">{{removeFromRoom}}</button>
+      </block>
+      <button class="btn-release {{breedPending ? 'is-disabled' : ''}}" bindtap="onRelease">{{breedPending ? '审核中不可放生' : releaseCat}}</button>
+    </view>
+
+    <text-modal
+      show="{{showNameModal}}"
+      title="{{nameTitle}}"
+      placeholder="{{namePlaceholder}}"
+      value="{{editNameValue}}"
+      maxlength="{{nameMax}}"
+      mode="input"
+      cancel-text="取消"
+      confirm-text="{{saveText}}"
+      bind:cancel="onNameCancel"
+      bind:confirm="onNameConfirm"
+    />
+
+    <text-modal
+      show="{{showNoteModal}}"
+      title="{{noteTitle}}"
+      placeholder="{{notePlaceholder}}"
+      value="{{editNoteValue}}"
+      maxlength="{{noteMax}}"
+      cancel-text="取消"
+      confirm-text="{{saveText}}"
+      bind:cancel="onNoteCancel"
+      bind:confirm="onNoteConfirm"
+    />
+
+    <view wx:if="{{preview}}" class="preview-mask" bindtap="closePreview">
+      <image class="preview-img" src="{{displayImage}}" mode="aspectFit" catchtap="noop" />
+      <button class="btn-primary save-album" catchtap="onSaveAlbum">保存到相册</button>
+    </view>
+
+    <view wx:if="{{showBreedPicker}}" class="breed-mask" catchtouchmove="noop" bindtap="onBreedCancel">
+      <view class="breed-sheet" catchtap="noop">
+        <view class="sheet-handle"></view>
+        <view class="breed-sheet-hd">
+          <text class="breed-sheet-title">选择品种</text>
+          <text class="breed-sheet-close" bindtap="onBreedCancel">取消</text>
+        </view>
+        <scroll-view scroll-y class="breed-sheet-list">
+          <view
+            wx:for="{{breedOptions}}"
+            wx:key="*this"
+            class="breed-option {{card.breed === item ? 'on' : ''}}"
+            data-breed="{{item}}"
+            bindtap="onPickBreed"
+          >{{item}}</view>
+        </scroll-view>
+      </view>
+    </view>
+  </view>
+
+  <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+</view>

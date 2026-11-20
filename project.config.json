@@ -1,0 +1,35 @@
+{
+  "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "coverView": true,
+    "showShadowRootInWxmlPanel": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "appid": "wx856255740c64e351",
+  "projectname": "遇见小花猫",
+  "compileType": "miniprogram",
+  "libVersion": "3.5.5",
+  "condition": {},
+  "cloudfunctionTemplateRoot": "cloudfunctionTemplate/",
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  },
+  "description": "遇见小花猫 - 拍下你遇到的猫，生成带记忆的卡牌",
+  "srcMiniprogramRoot": "miniprogram/",
+  "simulatorPluginLibVersion": {}
+}

@@ -1,0 +1,21 @@
+<view class="page history">
+  <view class="head">
+    <view class="head-title">它的出门记录</view>
+    <view class="head-sub">每一次小小冒险</view>
+  </view>
+
+  <view wx:if="{{ready && logs.length}}" class="list">
+    <view wx:for="{{logs}}" wx:key="_id" class="item">
+      <view class="time">{{item.timeLabel}}</view>
+      <view class="line">去了「{{item.distanceLabel}}」</view>
+      <view class="line">{{item.behaviorText}}</view>
+      <view wx:if="{{item.interactLine}}" class="line muted">{{item.interactLine}}</view>
+    </view>
+  </view>
+
+  <view wx:elif="{{ready}}" class="empty-card">
+    <empty-state main="{{empty}}" />
+  </view>
+
+  <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+</view>

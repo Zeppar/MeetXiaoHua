@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "和它的记忆",
+  "usingComponents": {
+    "empty-state": "/components/empty-state/empty-state",
+    "text-modal": "/components/text-modal/text-modal"
+  }
+}

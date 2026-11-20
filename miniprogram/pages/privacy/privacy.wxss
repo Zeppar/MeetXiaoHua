@@ -1,0 +1,28 @@
+.privacy {
+  background: #f5f7fa !important;
+}
+
+.privacy .h1 {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #1f2430;
+  margin-bottom: 12rpx;
+}
+
+.privacy .h2 {
+  margin-top: 36rpx;
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #1f2430;
+}
+
+.privacy .p {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #3d4654;
+  line-height: 1.7;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 20rpx;
+  box-shadow: 0 8rpx 20rpx rgba(70, 100, 140, 0.06);
+}

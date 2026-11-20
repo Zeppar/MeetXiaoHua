@@ -1,0 +1,61 @@
+<view class="page visit-log">
+  <view class="head">
+    <view class="head-top">
+      <view>
+        <view class="head-title">猫猫出门记录</view>
+        <view class="head-sub">你去串门 · 别人来串门</view>
+      </view>
+      <view class="settings-entry" bindtap="onToggleSettings">
+        <text>设置</text>
+        <text class="settings-caret">{{settingsOpen ? '▴' : '▾'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{settingsOpen}}" class="group">
+    <view class="row">
+      <view class="row-main">
+        <view class="row-title">{{outLabel}}</view>
+      </view>
+      <switch checked="{{allowMyCatOut}}" color="#2fd074" bindchange="onToggleOut" />
+    </view>
+    <view class="row">
+      <view class="row-main">
+        <view class="row-title">{{visitLabel}}</view>
+      </view>
+      <switch checked="{{allowVisitors}}" color="#2fd074" bindchange="onToggleVisit" />
+    </view>
+    <view class="row last">
+      <view class="row-main">
+        <view class="row-title">{{distLabel}}</view>
+        <view class="row-tip">{{distTip}}</view>
+      </view>
+      <switch checked="{{showDistance}}" color="#2fd074" bindchange="onToggleDist" />
+    </view>
+  </view>
+
+  <view class="tabs">
+    <view class="tab {{tab === 'all' ? 'on' : ''}}" data-tab="all" bindtap="onTab">全部</view>
+    <view class="tab {{tab === 'outbound' ? 'on' : ''}}" data-tab="outbound" bindtap="onTab">去串门</view>
+    <view class="tab {{tab === 'inbound' ? 'on' : ''}}" data-tab="inbound" bindtap="onTab">来串门</view>
+  </view>
+
+  <view wx:if="{{ready && !empty}}" class="list">
+    <view wx:for="{{logs}}" wx:key="_id" class="item">
+      <view class="item-top">
+        <view class="chip chip-{{item.direction}}">{{item.directionLabel}}</view>
+        <view class="time">{{item.timeLabel}}</view>
+      </view>
+      <view class="title">{{item.title}}</view>
+      <view class="line">{{item.summary}}</view>
+      <view wx:if="{{item.behaviorText}}" class="line">{{item.behaviorText}}</view>
+      <view wx:if="{{item.interactLine}}" class="line muted">{{item.interactLine}}</view>
+    </view>
+  </view>
+
+  <view wx:elif="{{ready}}" class="empty-card">
+    <empty-state main="还没有串门记录" sub="小猫出门或有客来访后，会出现在这里" />
+  </view>
+
+  <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+</view>

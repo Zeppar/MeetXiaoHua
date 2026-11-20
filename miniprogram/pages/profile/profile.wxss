@@ -1,0 +1,150 @@
+.profile {
+  background: #f5f7fa !important;
+}
+
+.hero-card {
+  position: relative;
+  height: 280rpx;
+  border-radius: 36rpx;
+  overflow: hidden;
+  box-shadow: 0 16rpx 36rpx rgba(70, 100, 140, 0.12);
+}
+
+.hero-deco {
+  width: 100%;
+  height: 100%;
+  filter: blur(0.5px);
+}
+
+.hero-mask {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.15), rgba(245,247,250,0.92));
+}
+
+.hero-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: linear-gradient(160deg, #7ec8ff, #4da3ff);
+  color: #fff;
+  font-size: 48rpx;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 6rpx solid #fff;
+  box-shadow: 0 12rpx 24rpx rgba(77, 163, 255, 0.28);
+}
+
+.nickname {
+  margin-top: 12rpx;
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #1f2430;
+}
+
+.hero-tip {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #8b95a5;
+}
+
+.stats {
+  margin-top: 24rpx;
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 32rpx;
+  box-shadow: 0 14rpx 32rpx rgba(70, 100, 140, 0.1);
+  padding: 28rpx 8rpx;
+}
+
+.stat {
+  flex: 1;
+  text-align: center;
+}
+
+.stat-line {
+  width: 2rpx;
+  height: 48rpx;
+  background: rgba(120, 140, 170, 0.12);
+}
+
+.stat-num {
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #2fd074;
+}
+
+.stat-label {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8b95a5;
+}
+
+.menu {
+  margin-top: 24rpx;
+  background: #fff;
+  border-radius: 32rpx;
+  box-shadow: 0 14rpx 32rpx rgba(70, 100, 140, 0.1);
+  overflow: hidden;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 30rpx 28rpx;
+  color: #1f2430;
+  font-size: 28rpx;
+  border-bottom: 2rpx solid rgba(120, 140, 170, 0.08);
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-ico {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 14rpx;
+  margin-right: 18rpx;
+}
+
+.menu-ico.out { background: linear-gradient(160deg, #ffe0ef, #ffb8d4); }
+.menu-ico.privacy { background: linear-gradient(160deg, #d7ecff, #9fd2ff); }
+.menu-ico.about { background: linear-gradient(160deg, #d9f8e8, #9eefc0); }
+.menu-ico.feedback { background: linear-gradient(160deg, #ffe8d4, #ffc39a); }
+
+.menu-txt {
+  flex: 1;
+  font-weight: 600;
+}
+
+.menu-arrow {
+  color: #c0c7d2;
+  font-size: 36rpx;
+  font-weight: 500;
+}
+
+.menu-btn {
+  background: transparent;
+  text-align: left;
+  border-radius: 0;
+  margin: 0;
+  line-height: 1.5;
+  width: 100%;
+}
+
+.menu-btn::after {
+  border: none;
+}

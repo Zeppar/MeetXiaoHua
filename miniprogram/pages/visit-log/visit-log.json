@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "猫猫出门记录",
+  "usingComponents": {
+    "empty-state": "/components/empty-state/empty-state"
+  }
+}

@@ -1,0 +1,11 @@
+node_modules/
+miniprogram_npm/
+cloudfunctions/**/node_modules/
+.DS_Store
+*.log
+**/secrets.js
+**/secrets.local.js
+**/.env
+**/.env.*
+scripts/.rembg-out/
+project.private.config.json

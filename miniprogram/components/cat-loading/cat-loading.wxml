@@ -1,0 +1,13 @@
+<!-- 用 hidden 而非 wx:if，避免首屏创建/销毁组件触发渲染层同步错误 -->
+<view
+  class="cat-loading {{fullscreen ? 'is-full' : 'is-inline'}}"
+  hidden="{{!show}}"
+  catchtouchmove="noop"
+>
+  <view class="panel">
+    <view class="spin-ring">
+      <image class="loading-img" src="/assets/illus/loading.png" mode="aspectFit" />
+    </view>
+    <view wx:if="{{text}}" class="tip">{{text}}</view>
+  </view>
+</view>

@@ -1,0 +1,10 @@
+{
+  "navigationStyle": "custom",
+  "navigationBarTitleText": "我的足迹",
+  "navigationBarBackgroundColor": "#eef1f4",
+  "backgroundColor": "#eef1f4",
+  "backgroundColorTop": "#eef1f4",
+  "backgroundColorBottom": "#eef1f4",
+  "disableScroll": true,
+  "usingComponents": {}
+}

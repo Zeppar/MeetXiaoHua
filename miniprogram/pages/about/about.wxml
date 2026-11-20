@@ -1,0 +1,16 @@
+<view class="page about">
+  <view class="hero">
+    <image class="hero-img" src="/assets/illus/hero-globe.jpg" mode="aspectFill" />
+    <view class="hero-mask"></view>
+    <view class="hero-copy">
+      <view class="brand">遇见小花猫</view>
+      <view class="slogan">拍下你遇到的猫，收进你的小屋</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="row"><text class="k">版本</text><text class="v">{{version}}</text></view>
+    <view class="row"><text class="k">定位</text><text class="v">记录生活里的猫瞬间</text></view>
+    <view class="row"><text class="k">开发者</text><text class="v">MeetXiaoHua</text></view>
+  </view>
+</view>

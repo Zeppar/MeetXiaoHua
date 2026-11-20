@@ -1,0 +1,10 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "description": "遇见小花猫统一云函数 API",
+  "main": "index.js",
+  "dependencies": {
+    "tencentcloud-sdk-nodejs": "^4.1.344",
+    "wx-server-sdk": "~2.6.3"
+  }
+}
