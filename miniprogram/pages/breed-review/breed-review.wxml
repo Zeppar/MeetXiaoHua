@@ -1,24 +1,48 @@
-<view class="page breed-review">
+<view class="page page-sub breed-review">
   <view class="head">
-    <view class="head-title">品种审核</view>
-    <view class="head-sub">用户提交的换品种申请，在这里通过或驳回</view>
+    <view class="h2"><text class="marker">品种审核</text></view>
+    <view class="caption mt-1">用户提交的换品种申请，在这里通过或驳回</view>
   </view>
 
-  <view wx:if="{{ready && !empty}}" class="list">
-    <view wx:for="{{list}}" wx:key="_id" class="item">
-      <view class="time">{{item.timeLabel}}</view>
-      <view class="line">申请改为「{{item.toBreed}}」</view>
-      <view class="line muted">当前展示：{{item.fromBreed || '待识别'}}</view>
-      <view wx:if="{{item.recognizedBreed}}" class="line muted">当初识别：{{item.recognizedBreed}}</view>
-      <view class="ops">
+  <view wx:if="{{ready && !empty}}" class="review-list">
+    <view
+      wx:for="{{list}}"
+      wx:key="_id"
+      class="paper review-item anim-rise {{index < 4 ? 'delay-' + (index + 1) : ''}}"
+    >
+      <view class="tape {{index % 2 ? 'tape-mint tape-right' : 'tape-left'}}"></view>
+
+      <view class="review-top">
+        <view class="review-thumb">
+          <image wx:if="{{item.image}}" class="sticker review-img {{index % 2 ? 'tilt-r' : 'tilt-l'}}" src="{{item.image}}" mode="aspectFit" />
+          <image wx:else class="review-ph" src="/assets/art/cat-shadow.svg" mode="aspectFit" />
+        </view>
+
+        <view class="review-main">
+          <view class="review-change">
+            <text class="from {{(!item.fromBreed || item.fromBreed === '待识别') ? 'from-muted' : ''}}">{{item.fromBreed || '待识别'}}</text>
+            <view class="arrow">
+              <view class="arrow-line"></view>
+              <view class="arrow-head"></view>
+            </view>
+            <text class="to">{{item.toBreed || '还没选品种'}}</text>
+          </view>
+          <view wx:if="{{item.recognizedBreed}}" class="tiny mt-1">当初识别：{{item.recognizedBreed}}</view>
+          <view class="tiny review-time">{{item.timeLabel}}</view>
+        </view>
+
+        <view class="seal review-seal {{item.statusCls}}">{{item.statusText}}</view>
+      </view>
+
+      <view class="review-ops">
         <button
-          class="op reject"
+          class="btn-secondary btn-sm op reject"
           data-id="{{item._id}}"
           data-cardid="{{item.cardId}}"
           bindtap="onReject"
         >驳回</button>
         <button
-          class="op ok"
+          class="btn-soft btn-sm op ok"
           data-id="{{item._id}}"
           data-cardid="{{item.cardId}}"
           bindtap="onApprove"
@@ -27,8 +51,9 @@
     </view>
   </view>
 
-  <view wx:elif="{{ready}}" class="empty-card">
-    <empty-state main="暂无待审申请" sub="图鉴里换品种后，会出现在这里" />
+  <view wx:elif="{{ready}}" class="paper empty-card">
+    <view class="tape tape-blush"></view>
+    <empty-state main="暂无待审申请" sub="图鉴里换品种后，会出现在这里" illus="/assets/art/empty-mail.svg" />
   </view>
 
   <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />

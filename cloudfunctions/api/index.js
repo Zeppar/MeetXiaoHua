@@ -841,7 +841,7 @@ function buildReport(outing, breed, showDistance) {
   if (outing.fed) interactLine = outing.pet ? '有人摸了摸它。有人给了它一颗猫粮。' : '有人给了它一颗猫粮。'
   return {
     title: '🐾 它回来了',
-    distanceLine: `你的${breed || '小猫'}去了一趟「${distLabel}」`,
+    distanceLine: `你的${(['待识别', '识别中…', '未知小动物'].indexOf(breed) >= 0 ? '' : breed) || '小猫'}去了一趟「${distLabel}」`,
     behaviorLine: outing.behaviorText || '',
     interactLine,
     createdAt: Date.now()
@@ -1506,7 +1506,7 @@ async function listVisitLogs(openid, { direction } = {}) {
     if (l.adopted) interactLine += '被收留进了新家。'
     const title =
       l.direction === 'outbound'
-        ? `你的${l.name || l.breed || '小猫'}去串门了`
+        ? `你的${l.name || (['待识别', '识别中…', '未知小动物'].indexOf(l.breed) >= 0 ? '' : l.breed) || '小猫'}去串门了`
         : `${l.fromReleased ? '流浪的' : ''}${l.name || l.breed || '小猫'}来过`
     const summary =
       l.direction === 'outbound' ? `去了「${distanceLabel}」` : `来自「${distanceLabel}」`

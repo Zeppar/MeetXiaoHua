@@ -2,18 +2,19 @@ const api = require('../../services/api')
 const cache = require('../../services/storage-cache')
 const copy = require('../../constants/copy')
 const { CAT_BREEDS } = require('../../constants/breeds')
-const { formatDateShort, cardDisplayName } = require('../../utils/format')
+const { formatDateShort, cardDisplayName, isPlaceholderBreed } = require('../../utils/format')
 const { pickCardImage } = require('../../utils/card-media')
 const nav = require('../../utils/navigate')
 const pageLoad = require('../../utils/page-load')
 const { roomOccupancy } = require('../../utils/room-mates')
+const { isDevBuild } = require('../../utils/env')
 
 const DEBUG_MOCK_CARDS = [
   {
     _id: 'debug_cat_1',
     breed: '中华田园猫',
     cutoutPath: '/assets/illus/cat-cutout-border.png',
-    originalPath: '/assets/illus/mascot.png',
+    originalPath: '/assets/illus/mascot.jpg',
     dateLabel: '今天',
     placeText: '小区楼下',
     memoryCount: 2
@@ -79,12 +80,41 @@ function withAllFilter(filters) {
   return [{ breed: '全部', count: total }, ...list]
 }
 
+/** 图鉴收集进度：遇见过白名单里的几个猫品种 */
+function collectionOf(cards) {
+  const met = {}
+  ;(cards || []).forEach((c) => {
+    const b = c && String(c.breed || '').trim()
+    if (b && CAT_BREEDS.indexOf(b) >= 0) met[b] = true
+  })
+  const have = Object.keys(met).length
+  const total = CAT_BREEDS.length
+  // 每个品种一个收集格：遇见过的亮名字，没遇见的放剪影
+  const breeds = CAT_BREEDS.map((name) => ({ name, met: !!met[name] }))
+  return { have, total, percent: Math.round((have / total) * 100), breeds }
+}
+
+/** 邮戳上的两行字：上「年份」，下「月.日」；没有拍摄时间就用 dateLabel */
+function stampOf(c) {
+  const d = c && c.shotAt ? new Date(c.shotAt) : null
+  if (d && !Number.isNaN(d.getTime())) {
+    const m = d.getMonth() + 1
+    const day = d.getDate()
+    return {
+      stampK: String(d.getFullYear()),
+      stampV: `${m < 10 ? '0' + m : m}.${day < 10 ? '0' + day : day}`
+    }
+  }
+  return { stampK: '遇见', stampV: (c && c.dateLabel) || '某天' }
+}
+
 Page({
   data: {
     breedFilter: '',
     filters: [],
     cards: [],
     hasCats: false,
+    collection: collectionOf([]),
     featuredId: '',
     featured: null,
     emptyTip: '暂无猫猫记录，去遇见一只吧',
@@ -92,6 +122,7 @@ Page({
     // debug：null=真实数据，true=强制有猫，false=强制无猫
     debugForceHasCats: null,
     debugLabel: 'DEBUG 真实',
+    showDebug: isDevBuild(),
     pageLoading: false,
     loadingText: copy.tips.pageLoading,
     ready: false,
@@ -142,14 +173,20 @@ Page({
     const hasFile = !!displayImage
     const occ = this._roomOcc
     const inRoom = !!(occ && occ.isInRoom && occ.isInRoom(c._id))
+    const stamp = stampOf({ shotAt: c.shotAt, dateLabel: c.dateLabel || formatDateShort(c.shotAt) })
     return {
       ...merged,
+      stampK: stamp.stampK,
+      stampV: stamp.stampV,
       stickerImage: displayImage,
       isSticker: !!(c.cutoutFileId || (c.cutoutPath && displayImage)),
       displayImage,
       dateLabel: c.dateLabel || formatDateShort(c.shotAt),
-      placeText: c.placeText || '',
+      // 旧数据里把提示语「已记录当前位置」当成了地名，展示时去掉
+      placeText: c.placeText === '已记录当前位置' ? '' : c.placeText || '',
       displayName: cardDisplayName(merged),
+      hasName: !!String(merged.name || '').trim(),
+      breedUnknown: isPlaceholderBreed(merged.breed),
       _hasMedia: hasFile,
       needMedia: !hasFile,
       breedPending: c.breedReviewStatus === 'pending' || !!c.pendingBreed,
@@ -309,11 +346,14 @@ Page({
       return
     }
 
+    // 收集进度只在「全部」视图下算（按品种筛选时列表不全）
+    const collection = breedFilter ? this.data.collection : collectionOf(listRes.cards || [])
     const { featuredId, featured } = this.pickFeatured(cards, this.data.featuredId)
     this.setData({
       filters,
       cards,
       hasCats,
+      collection,
       featuredId,
       featured,
       debugLabel: this.debugLabelOf(force),
@@ -352,6 +392,8 @@ Page({
     const featured = (this.data.cards || []).find((c) => c._id === id)
     if (!featured) return
     this.setData({ featuredId: id, featured })
+    // 主展示在页顶，点了下面的格子要能看到换了哪只
+    wx.pageScrollTo({ scrollTop: 0, duration: 260 })
   },
 
   onRelease() {

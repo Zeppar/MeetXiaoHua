@@ -1,72 +1,181 @@
-<view class="home">
-  <!-- Hero：插画下移对齐 PetMeet，标题留在天空区 -->
-  <view class="hero">
-    <image class="hero-img" src="/assets/illus/hero-globe.jpg" mode="aspectFill" />
-    <view class="hero-top" style="padding-top: {{statusBar}}px;">
-      <view class="top-nav" style="min-height: {{navHeight}}px;">
-        <image
-          class="brand-logo"
-          src="/assets/illus/brand-logo.png"
-          mode="aspectFit"
-          aria-label="遇见小花猫"
-        />
-      </view>
-      <view class="hero-online">已记录 {{recentCount}} 次相遇</view>
+<view class="page home">
+  <!-- 顶栏：与胶囊同排 -->
+  <view class="topbar" style="padding-top: {{statusBar}}px;">
+    <view class="brand row gap-1" style="height: {{navHeight}}px;">
+      <image class="brand-mark" src="/assets/art/logo-mark.svg" />
+      <text class="brand-name">遇见小花猫</text>
     </view>
-    <view class="hero-slogan">快去寻找你的小猫吧</view>
   </view>
 
-  <!-- 底部内容卡片层：与顶部天空分割 -->
-  <view class="sheet">
-    <view class="cards-2">
-      <view class="card-lg" bindtap="onMeet">
-        <image class="card-img" src="/assets/illus/card-meet.jpg" mode="aspectFill" />
-        <view class="pill">
-          <text class="pill-txt">遇见一只猫</text>
-          <view class="pill-go">›</view>
-        </view>
+  <!-- 今天 -->
+  <view class="greet anim-rise">
+    <view class="tiny">{{today}}</view>
+    <view class="h1 greet-title"><text class="marker">{{greeting.title}}</text></view>
+    <view class="caption">{{greeting.sub}}</view>
+  </view>
+
+  <!-- 街角 + 主操作 -->
+  <view class="hero paper anim-rise delay-1">
+    <view class="tape tape-left"></view>
+    <view class="tape tape-sky tape-right"></view>
+    <image class="hero-art" src="/assets/art/hero-corner.svg" mode="widthFix" />
+    <view class="hero-stats row">
+      <view class="hs grow">
+        <text class="hs-num num">{{recentCount}}</text>
+        <text class="hs-unit">只猫已收进手帐</text>
       </view>
-      <view class="card-lg" bindtap="onRoom">
-        <image class="card-img" src="/assets/illus/card-room.jpg" mode="aspectFill" />
-        <view class="pill">
-          <text class="pill-txt">我的小屋</text>
-          <view class="pill-go">›</view>
-        </view>
+      <view class="hs-sep"></view>
+      <view class="hs grow">
+        <text class="hs-num num">{{breedCount}}</text>
+        <text class="hs-unit">/ {{breedTotal}} 个品种</text>
       </view>
     </view>
+    <button class="btn-primary btn-block" bindtap="onMeet">
+      <image class="cta-ico" src="/assets/icons/camera-white.svg" />
+      <text>去遇见一只猫</text>
+    </button>
+  </view>
 
-    <view class="cards-3">
-      <view class="card-sm" bindtap="onAlbum">
-        <image class="card-img mascot-cover" src="/assets/illus/mascot.png" mode="aspectFill" />
-        <view class="pill sm">
-          <text class="pill-txt">图鉴</text>
-          <view class="pill-go">›</view>
-        </view>
+  <!-- 我的猫现在 -->
+  <view class="section-head">
+    <text class="section-title">我的猫现在</text>
+    <text class="section-link" bindtap="onRoom">去小屋</text>
+  </view>
+
+  <view class="now paper anim-rise delay-2" hover-class="tap-press" bindtap="onRoom">
+    <block wx:if="{{myCat.status === 'home'}}">
+      <view class="now-pic">
+        <image wx:if="{{myCat.image}}" class="now-img sticker tilt-l" src="{{myCat.image}}" mode="aspectFit" />
       </view>
-      <view class="card-sm" bindtap="onMap">
-        <image class="card-img" src="/assets/illus/mini-map.jpg" mode="aspectFill" />
-        <view class="pill sm">
-          <text class="pill-txt">足迹</text>
-          <view class="pill-go">›</view>
+      <view class="grow">
+        <view class="row gap-2">
+          <text class="h3 ellipsis">{{myCat.name}}</text>
+          <text class="seal seal-mint">在家</text>
         </view>
+        <view class="caption mt-1">正窝在小屋里，等你来摸摸头</view>
       </view>
-      <view class="card-sm" bindtap="onOuting">
-        <image class="card-img" src="/assets/illus/mini-outing.jpg" mode="aspectFill" />
-        <view class="pill sm">
-          <text class="pill-txt">出门</text>
-          <view class="pill-go">›</view>
+    </block>
+    <block wx:elif="{{myCat.status === 'away'}}">
+      <view class="now-pic now-away">
+        <image class="now-paw p1" src="/assets/icons/paw.svg" />
+        <image class="now-paw p2" src="/assets/icons/paw.svg" />
+        <image class="now-paw p3" src="/assets/icons/paw.svg" />
+      </view>
+      <view class="grow">
+        <view class="row gap-2">
+          <text class="h3 ellipsis">{{myCat.name}}</text>
+          <text class="seal seal-sky">出门中</text>
         </view>
+        <view class="caption mt-1">{{myCat.visiting ? '正在拜访别人的小屋' : '出门散步了，晚点会回来'}}</view>
       </view>
+    </block>
+    <block wx:else>
+      <view class="now-pic">
+        <image class="now-img" src="/assets/art/cat-shadow.svg" mode="aspectFit" />
+      </view>
+      <view class="grow">
+        <view class="h3">小屋还空着</view>
+        <view class="caption mt-1">去图鉴挑一只猫，让它住进来</view>
+      </view>
+    </block>
+    <view class="list-arrow"></view>
+  </view>
+
+  <!-- 它回来了 / 有猫来过 -->
+  <view wx:if="{{hasReport}}" class="postcard report anim-rise delay-3" hover-class="tap-press" bindtap="onRoom">
+    <view class="row gap-2">
+      <view class="grow">
+        <view class="h3">它回来了</view>
+        <view class="caption mt-1 hand">带回一张明信片，去小屋看看它去了哪儿</view>
+      </view>
+      <view class="stamp report-stamp">
+        <text class="stamp-k">寄自</text>
+        <text class="stamp-v">远方</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{visitor}}" class="note visit anim-rise delay-3" hover-class="tap-press" bindtap="onRoom">
+    <view class="visit-title">有猫来串门啦</view>
+    <view class="visit-body">一只来自{{visitor.distanceLabel || '附近'}}的{{visitor.breed || '小猫'}}，正在你的小屋里。</view>
+    <view class="visit-go">去打个招呼</view>
+  </view>
+  <view wx:elif="{{leftTrace}}" class="note visit anim-rise delay-3" hover-class="tap-press" bindtap="onRoom">
+    <view class="visit-title">有猫来过</view>
+    <view class="visit-body">一只来自{{leftTrace.distanceLabel || '附近'}}的{{leftTrace.breed || '小猫'}}来过，留下了几个爪印。</view>
+  </view>
+
+  <!-- 最近遇见 -->
+  <view class="section-head">
+    <text class="section-title">最近遇见</text>
+    <text wx:if="{{recent.length}}" class="section-link" bindtap="onAlbum">翻开图鉴</text>
+  </view>
+
+  <scroll-view wx:if="{{recent.length}}" class="recent" scroll-x enable-flex enhanced show-scrollbar="{{false}}">
+    <view class="recent-row">
+      <view
+        wx:for="{{recent}}"
+        wx:key="_id"
+        class="rc paper anim-rise delay-{{index < 4 ? index + 1 : 4}}"
+        hover-class="tap-press"
+        data-id="{{item._id}}"
+        bindtap="onOpenCard"
+      >
+        <view class="rc-pic">
+          <image wx:if="{{item.image}}" class="rc-img sticker {{index % 2 ? 'tilt-r' : 'tilt-l'}}" src="{{item.image}}" mode="aspectFit" />
+          <image wx:else class="rc-img" src="/assets/art/cat-shadow.svg" mode="aspectFit" />
+        </view>
+        <view class="rc-name ellipsis">{{item.name}}</view>
+        <view class="tiny">{{item.dateLabel}}</view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view wx:else class="paper recent-empty anim-rise delay-3">
+    <image class="re-illus" src="/assets/art/empty-album.svg" mode="aspectFit" />
+    <view class="grow">
+      <view class="h3">{{emptyMain}}</view>
+      <view class="caption mt-1">{{emptySub}}</view>
+    </view>
+  </view>
+
+  <!-- 翻翻手帐 -->
+  <view class="section-head">
+    <text class="section-title">翻翻手帐</text>
+  </view>
+  <view class="more row gap-2">
+    <view class="more-item paper grow" hover-class="tap-press" bindtap="onAlbum">
+      <view class="more-ico" style="background: var(--color-primary-soft);">
+        <image src="/assets/icons/album-on.svg" />
+      </view>
+      <text class="more-t">图鉴</text>
+      <text class="tiny">收集过的猫</text>
+    </view>
+    <view class="more-item paper grow" hover-class="tap-press" bindtap="onMap">
+      <view class="more-ico" style="background: var(--color-sky-soft);">
+        <image src="/assets/icons/outing.svg" />
+      </view>
+      <text class="more-t">足迹</text>
+      <text class="tiny">在哪遇见的</text>
+    </view>
+    <view class="more-item paper grow" hover-class="tap-press" bindtap="onOuting">
+      <view class="more-ico" style="background: var(--color-blush-soft);">
+        <image src="/assets/icons/paw.svg" />
+      </view>
+      <text class="more-t">来往</text>
+      <text class="tiny">出门与来访</text>
     </view>
   </view>
 
   <!-- 隐私弹窗 -->
   <view wx:if="{{showPrivacy}}" class="mask" catchtouchmove="noop">
-    <view class="dialog">
+    <view class="dialog privacy">
+      <view class="tape"></view>
+      <image class="privacy-art" src="/assets/art/logo-mark.svg" />
       <view class="dialog-title">{{privacyTitle}}</view>
       <view class="dialog-body">{{privacyBody}}</view>
-      <navigator url="/pages/privacy/privacy" class="dialog-link">查看完整隐私政策</navigator>
-      <button class="btn-primary" bindtap="onAgreePrivacy">同意并继续</button>
+      <navigator url="/pages/privacy/privacy" class="privacy-link">查看完整隐私政策</navigator>
+      <button class="btn-primary btn-block mt-3" bindtap="onAgreePrivacy">同意并继续</button>
     </view>
   </view>
 

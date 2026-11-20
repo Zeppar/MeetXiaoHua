@@ -1,14 +1,6 @@
-<view class="empty">
-  <view class="empty-art" aria-hidden="true">
-    <view class="paw">
-      <view class="toe t1"></view>
-      <view class="toe t2"></view>
-      <view class="toe t3"></view>
-      <view class="toe t4"></view>
-      <view class="pad"></view>
-    </view>
-  </view>
-  <view class="empty-main">{{main}}</view>
+<view class="empty anim-rise">
+  <image class="empty-illus" src="{{illus}}" mode="aspectFit" />
+  <view class="empty-title">{{main}}</view>
   <view wx:if="{{sub}}" class="empty-sub">{{sub}}</view>
   <button wx:if="{{buttonText}}" class="btn-primary empty-btn" bindtap="onTap">{{buttonText}}</button>
 </view>

@@ -1,150 +1,179 @@
+/* 我的：像一本手帐的封面 */
+
 .profile {
-  background: #f5f7fa !important;
+  padding-top: var(--space-5);
 }
 
-.hero-card {
+/* —— 封面 —— */
+.cover {
+  padding: var(--space-5) var(--space-4) var(--space-4) calc(var(--space-4) + 20rpx);
+  overflow: visible;
+}
+
+/* 左侧书脊：一道橙色细条 + 装订孔 */
+.cover-spine {
+  position: absolute;
+  top: 24rpx;
+  bottom: 24rpx;
+  left: 18rpx;
+  width: 10rpx;
+  border-radius: var(--radius-pill);
+  background: repeating-linear-gradient(180deg, var(--color-primary-soft) 0 22rpx, transparent 22rpx 34rpx);
+}
+
+.cover-top {
   position: relative;
-  height: 280rpx;
-  border-radius: 36rpx;
-  overflow: hidden;
-  box-shadow: 0 16rpx 36rpx rgba(70, 100, 140, 0.12);
-}
-
-.hero-deco {
-  width: 100%;
-  height: 100%;
-  filter: blur(0.5px);
-}
-
-.hero-mask {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255,255,255,0.15), rgba(245,247,250,0.92));
-}
-
-.hero-content {
-  position: absolute;
-  inset: 0;
+  z-index: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: var(--space-3);
 }
 
 .avatar {
-  width: 120rpx;
-  height: 120rpx;
+  position: relative;
+  width: 140rpx;
+  height: 140rpx;
+  flex-shrink: 0;
   border-radius: 50%;
-  background: linear-gradient(160deg, #7ec8ff, #4da3ff);
-  color: #fff;
-  font-size: 48rpx;
-  font-weight: 800;
+  background: var(--color-primary-soft);
+  border: 6rpx solid var(--color-surface);
+  box-shadow: 0 0 0 3rpx var(--color-title), var(--shadow-card);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 6rpx solid #fff;
-  box-shadow: 0 12rpx 24rpx rgba(77, 163, 255, 0.28);
 }
 
-.nickname {
-  margin-top: 12rpx;
-  font-size: 34rpx;
+.avatar-img {
+  width: 104rpx;
+  height: 104rpx;
+}
+
+.avatar-letter {
+  position: absolute;
+  right: -10rpx;
+  bottom: -6rpx;
+  min-width: 48rpx;
+  height: 48rpx;
+  padding: 0 8rpx;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  background: var(--color-surface);
+  border: 3rpx solid var(--color-primary-ink);
+  color: var(--color-primary-ink);
+  font-size: var(--font-sm);
   font-weight: 800;
-  color: #1f2430;
+  line-height: 42rpx;
+  text-align: center;
+  transform: rotate(8deg);
 }
 
-.hero-tip {
-  margin-top: 4rpx;
-  font-size: 22rpx;
-  color: #8b95a5;
+.cover-who {
+  flex: 1;
+  min-width: 0;
 }
 
+.cover-k {
+  letter-spacing: 4rpx;
+  font-weight: 700;
+}
+
+.cover-sub {
+  margin-top: 6rpx;
+  font-size: var(--font-md);
+  color: var(--color-text-2);
+}
+
+.cover-line {
+  margin: var(--space-4) 0 var(--space-3);
+  border-top: 2rpx dashed var(--color-line);
+}
+
+/* —— 三枚邮戳 —— */
 .stats {
-  margin-top: 24rpx;
+  position: relative;
+  z-index: 1;
   display: flex;
-  align-items: center;
-  background: #fff;
-  border-radius: 32rpx;
-  box-shadow: 0 14rpx 32rpx rgba(70, 100, 140, 0.1);
-  padding: 28rpx 8rpx;
+  justify-content: space-around;
+  padding: var(--space-1) 0;
 }
 
 .stat {
-  flex: 1;
-  text-align: center;
-}
-
-.stat-line {
-  width: 2rpx;
-  height: 48rpx;
-  background: rgba(120, 140, 170, 0.12);
-}
-
-.stat-num {
-  font-size: 40rpx;
-  font-weight: 800;
-  color: #2fd074;
-}
-
-.stat-label {
-  margin-top: 6rpx;
-  font-size: 22rpx;
-  color: #8b95a5;
-}
-
-.menu {
-  margin-top: 24rpx;
-  background: #fff;
-  border-radius: 32rpx;
-  box-shadow: 0 14rpx 32rpx rgba(70, 100, 140, 0.1);
-  overflow: hidden;
-}
-
-.menu-item {
   display: flex;
-  align-items: center;
-  padding: 30rpx 28rpx;
-  color: #1f2430;
-  font-size: 28rpx;
-  border-bottom: 2rpx solid rgba(120, 140, 170, 0.08);
+  justify-content: center;
 }
 
-.menu-item:last-child {
-  border-bottom: none;
+.stat-stamp {
+  width: 150rpx;
+  height: 150rpx;
 }
 
-.menu-ico {
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 14rpx;
-  margin-right: 18rpx;
+.stat-stamp.tilt-2 { transform: rotate(6deg); }
+.stat-stamp.tilt-3 { transform: rotate(-4deg); }
+
+.stat-stamp .stamp-k {
+  letter-spacing: 2rpx;
 }
 
-.menu-ico.out { background: linear-gradient(160deg, #ffe0ef, #ffb8d4); }
-.menu-ico.privacy { background: linear-gradient(160deg, #d7ecff, #9fd2ff); }
-.menu-ico.about { background: linear-gradient(160deg, #d9f8e8, #9eefc0); }
-.menu-ico.feedback { background: linear-gradient(160deg, #ffe8d4, #ffc39a); }
-
-.menu-txt {
-  flex: 1;
-  font-weight: 600;
+.stat-stamp .stamp-v {
+  margin-top: 4rpx;
+  font-size: var(--font-xl);
 }
 
-.menu-arrow {
-  color: #c0c7d2;
-  font-size: 36rpx;
-  font-weight: 500;
+.stat-sky {
+  color: var(--color-sky-ink);
+  border-color: rgba(58, 110, 168, 0.7);
+  box-shadow: inset 0 0 0 7rpx var(--color-surface), inset 0 0 0 9rpx rgba(58, 110, 168, 0.4);
 }
 
-.menu-btn {
-  background: transparent;
-  text-align: left;
-  border-radius: 0;
-  margin: 0;
-  line-height: 1.5;
+.stat-blush {
+  color: var(--color-blush-ink);
+  border-color: rgba(184, 80, 106, 0.7);
+  box-shadow: inset 0 0 0 7rpx var(--color-surface), inset 0 0 0 9rpx rgba(184, 80, 106, 0.4);
+}
+
+.cover-trail {
+  position: absolute;
+  right: 20rpx;
+  top: 20rpx;
+  width: 180rpx;
+  height: 90rpx;
+  opacity: 0.55;
+}
+
+/* —— 目录 —— */
+.ico-orange { background: var(--color-primary-soft); }
+.ico-mint { background: var(--color-mint-soft); }
+.ico-sky { background: var(--color-sky-soft); }
+.ico-blush { background: var(--color-blush-soft); }
+
+/* 意见反馈是原生 button：去掉默认样式，让它看起来和别的行一样 */
+.row-btn {
   width: 100%;
+  margin: 0;
+  background: transparent;
+  border-radius: 0;
+  line-height: normal;
+  font-size: var(--font-md);
+  text-align: left;
+  color: inherit;
 }
 
-.menu-btn::after {
-  border: none;
+/* —— 封底 —— */
+.foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: var(--space-5);
+}
+
+.foot-cat {
+  width: 96rpx;
+  height: 112rpx;
+  opacity: 0.9;
+}
+
+.foot-txt {
+  margin-top: var(--space-1);
+  font-size: var(--font-sm);
+  color: var(--color-muted);
 }

@@ -4,6 +4,20 @@ const { COPY } = require('../../constants/outing')
 const { formatDateTime } = require('../../utils/format')
 const pageLoad = require('../../utils/page-load')
 
+/** 展示用：从「3.2 千米外的小屋」里取出数字，放进距离邮戳；关了距离则为空 */
+function pickKm(label) {
+  const m = String(label || '').match(/\d+(\.\d+)?/)
+  return m ? m[0] : ''
+}
+
+/** 展示用：自己猫出门用自己的图；来访猫只用云端 / 网络图，避免别人设备上的本地路径 */
+function pickLogImage(l) {
+  const p = (l && l.cutoutPath) || ''
+  if (!p) return ''
+  if (l.direction === 'outbound') return p
+  return /^(cloud:|https?:)/.test(p) ? p : ''
+}
+
 Page({
   data: {
     tab: 'all',
@@ -66,7 +80,9 @@ Page({
     const { logs } = await api.listVisitLogs({ direction })
     const mapped = (logs || []).map((l) => ({
       ...l,
-      timeLabel: formatDateTime(l.at || l.leaveAt || l.createdAt)
+      timeLabel: formatDateTime(l.at || l.leaveAt || l.createdAt),
+      distKm: pickKm(l.distanceLabel),
+      catImage: pickLogImage(l)
     }))
     this.setData({
       logs: mapped,

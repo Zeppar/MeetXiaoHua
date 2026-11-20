@@ -1,60 +1,76 @@
-<view class="page visit-log">
-  <view class="head">
-    <view class="head-top">
-      <view>
-        <view class="head-title">猫猫出门记录</view>
-        <view class="head-sub">你去串门 · 别人来串门</view>
-      </view>
-      <view class="settings-entry" bindtap="onToggleSettings">
-        <text>设置</text>
-        <text class="settings-caret">{{settingsOpen ? '▴' : '▾'}}</text>
-      </view>
+<view class="page page-sub visit-log">
+  <view class="head anim-rise">
+    <view class="head-copy">
+      <view class="h2">猫猫出门记录</view>
+      <view class="caption mt-1">你去串门 · 别人来串门</view>
+    </view>
+    <view class="chip settings-entry {{settingsOpen ? 'chip-on' : ''}}" hover-class="tap-press" bindtap="onToggleSettings">
+      <text>设置</text>
+      <view class="caret {{settingsOpen ? 'caret-up' : ''}}"></view>
     </view>
   </view>
 
-  <view wx:if="{{settingsOpen}}" class="group">
-    <view class="row">
-      <view class="row-main">
-        <view class="row-title">{{outLabel}}</view>
-      </view>
-      <switch checked="{{allowMyCatOut}}" color="#2fd074" bindchange="onToggleOut" />
+  <view wx:if="{{settingsOpen}}" class="list settings anim-rise">
+    <view class="list-row">
+      <view class="list-title">{{outLabel}}</view>
+      <switch checked="{{allowMyCatOut}}" color="#7cc6a4" bindchange="onToggleOut" />
     </view>
-    <view class="row">
-      <view class="row-main">
-        <view class="row-title">{{visitLabel}}</view>
-      </view>
-      <switch checked="{{allowVisitors}}" color="#2fd074" bindchange="onToggleVisit" />
+    <view class="list-row">
+      <view class="list-title">{{visitLabel}}</view>
+      <switch checked="{{allowVisitors}}" color="#7cc6a4" bindchange="onToggleVisit" />
     </view>
-    <view class="row last">
-      <view class="row-main">
-        <view class="row-title">{{distLabel}}</view>
-        <view class="row-tip">{{distTip}}</view>
+    <view class="list-row set-row-tall">
+      <view class="grow">
+        <view class="list-title">{{distLabel}}</view>
+        <view class="list-sub set-tip">{{distTip}}</view>
       </view>
-      <switch checked="{{showDistance}}" color="#2fd074" bindchange="onToggleDist" />
+      <switch checked="{{showDistance}}" color="#7cc6a4" bindchange="onToggleDist" />
     </view>
   </view>
 
   <view class="tabs">
-    <view class="tab {{tab === 'all' ? 'on' : ''}}" data-tab="all" bindtap="onTab">全部</view>
-    <view class="tab {{tab === 'outbound' ? 'on' : ''}}" data-tab="outbound" bindtap="onTab">去串门</view>
-    <view class="tab {{tab === 'inbound' ? 'on' : ''}}" data-tab="inbound" bindtap="onTab">来串门</view>
+    <view class="chip {{tab === 'all' ? 'chip-on' : ''}}" hover-class="tap-press" data-tab="all" bindtap="onTab">全部</view>
+    <view class="chip {{tab === 'outbound' ? 'chip-on' : ''}}" hover-class="tap-press" data-tab="outbound" bindtap="onTab">去串门</view>
+    <view class="chip {{tab === 'inbound' ? 'chip-on' : ''}}" hover-class="tap-press" data-tab="inbound" bindtap="onTab">来串门</view>
   </view>
 
-  <view wx:if="{{ready && !empty}}" class="list">
-    <view wx:for="{{logs}}" wx:key="_id" class="item">
-      <view class="item-top">
-        <view class="chip chip-{{item.direction}}">{{item.directionLabel}}</view>
-        <view class="time">{{item.timeLabel}}</view>
+  <view wx:if="{{ready && !empty}}" class="timeline">
+    <view
+      wx:for="{{logs}}"
+      wx:key="_id"
+      class="tl-item anim-rise delay-{{index < 3 ? index + 1 : 4}}"
+    >
+      <view class="tl-dot {{item.direction === 'outbound' ? 'tl-dot-sky' : 'tl-dot-blush'}}"></view>
+
+      <view class="postcard log-card">
+        <view class="log-head">
+          <view class="seal {{item.direction === 'outbound' ? 'seal-sky' : 'seal-blush'}}">{{item.direction === 'outbound' ? '它出门了' : '有猫来过'}}</view>
+          <view class="tiny log-time">{{item.timeLabel}}</view>
+        </view>
+
+        <view class="log-main">
+          <image wx:if="{{item.catImage}}" class="log-cat sticker tilt-l" src="{{item.catImage}}" mode="aspectFit" />
+          <view class="log-body">
+            <view class="h3 log-title">{{item.title}}</view>
+            <view class="caption mt-1">{{item.summary}}</view>
+          </view>
+          <view class="stamp log-stamp {{item.direction === 'outbound' ? 'stamp-sky' : 'stamp-blush'}}">
+            <view class="stamp-k">{{item.distKm ? '千米' : '远方'}}</view>
+            <view class="stamp-v num">{{item.distKm ? item.distKm : '小屋'}}</view>
+          </view>
+        </view>
+
+        <view wx:if="{{item.behaviorText}}" class="hand log-behavior">{{item.behaviorText}}</view>
+        <view wx:if="{{item.interactLine}}" class="log-interact">
+          <image class="log-paw" src="/assets/icons/paw.svg" />
+          <text>{{item.interactLine}}</text>
+        </view>
       </view>
-      <view class="title">{{item.title}}</view>
-      <view class="line">{{item.summary}}</view>
-      <view wx:if="{{item.behaviorText}}" class="line">{{item.behaviorText}}</view>
-      <view wx:if="{{item.interactLine}}" class="line muted">{{item.interactLine}}</view>
     </view>
   </view>
 
-  <view wx:elif="{{ready}}" class="empty-card">
-    <empty-state main="还没有串门记录" sub="小猫出门或有客来访后，会出现在这里" />
+  <view wx:elif="{{ready}}" class="empty-wrap">
+    <empty-state main="还没有串门记录" sub="小猫出门或有客来访后，会出现在这里" illus="/assets/art/empty-mail.svg" />
   </view>
 
   <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />

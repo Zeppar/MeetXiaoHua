@@ -16,7 +16,7 @@ const DEBUG_MOCK_CAT = {
   breed: '中华田园猫',
   name: '小花',
   cutoutPath: '/assets/illus/cat-cutout-border.png',
-  originalPath: '/assets/illus/mascot.png',
+  originalPath: '/assets/illus/mascot.jpg',
   memoryCount: 2
 }
 

@@ -1,5 +1,7 @@
 {
-  "navigationBarTitleText": "卡牌详情",
+  "navigationBarTitleText": "它的日记",
+  "navigationBarBackgroundColor": "#FBF7F0",
+  "backgroundColor": "#FBF7F0",
   "usingComponents": {
     "text-modal": "/components/text-modal/text-modal"
   }

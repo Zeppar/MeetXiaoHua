@@ -1,309 +1,261 @@
-/* 天空渐变从顶铺开 */
-page {
-  background: #b9dcff;
-}
+/* 首页 · 今天 */
 
 .home {
-  position: relative;
-  height: 100vh;
-  max-height: 100vh;
-  padding-bottom: calc(148rpx + env(safe-area-inset-bottom));
-  box-sizing: border-box;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  background: linear-gradient(
-    180deg,
-    #b9dcff 0%,
-    #c6e3ff 18%,
-    #d6ecff 38%,
-    #e8f3fb 58%,
-    #f5f7fa 78%,
-    #f5f7fa 100%
-  );
+  padding-top: 0;
 }
 
-.hero-top {
-  position: relative;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  overflow: visible;
+/* —— 顶栏 —— */
+.topbar {
+  margin: 0 calc(-1 * var(--space-4));
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
 }
 
-.top-nav {
-  width: 100%;
-  padding: 0 28rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  overflow: visible;
-}
-
-.brand-logo {
-  height: 92rpx;
-  width: 520rpx;
-  max-width: 78%;
-  display: block;
-  flex-shrink: 0;
-}
-
-/* Hero：占满剩余高度，整页不滚动 */
-.hero {
-  position: relative;
-  flex: 1;
-  min-height: 420rpx;
-  margin: 0 0 -56rpx;
-  overflow: hidden;
-  z-index: 1;
-  background: #b9dcff;
-}
-
-.hero-img {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  width: 155%;
-  height: 100%;
-  margin-left: -77.5%;
-  display: block;
-  z-index: 0;
-  transform: translateY(0);
-}
-
-.hero-online {
-  margin-top: 20rpx;
-  padding: 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  font-size: 22rpx;
-  color: #5a6575;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.hero-slogan {
-  position: absolute;
-  left: 50%;
-  bottom: 96rpx;
-  transform: translateX(-50%);
-  z-index: 2;
-  max-width: 78%;
-  padding: 12rpx 28rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.3);
-  border: 1rpx solid rgba(255, 255, 255, 0.66);
-  backdrop-filter: blur(30px) saturate(160%);
-  -webkit-backdrop-filter: blur(30px) saturate(160%);
-  box-shadow:
-    0 12rpx 28rpx rgba(40, 60, 90, 0.1),
-    inset 0 1rpx 0 rgba(255, 255, 255, 0.8);
-  text-align: center;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #1f2430;
-  letter-spacing: 0.5rpx;
-  white-space: nowrap;
-  box-sizing: border-box;
-}
-
-/* 底部磨砂卡片层：固定高度，不把页面顶出滚动 */
-.sheet {
-  position: relative;
-  z-index: 2;
-  flex-shrink: 0;
-  margin-top: 0;
-  padding: 28rpx 28rpx 12rpx;
-  border-radius: 48rpx 48rpx 0 0;
-  background: rgba(255, 255, 255, 0.55);
-  border-top: 1rpx solid rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(36px) saturate(150%);
-  -webkit-backdrop-filter: blur(36px) saturate(150%);
-  box-shadow:
-    0 -18rpx 48rpx rgba(80, 110, 150, 0.1),
-    inset 0 1rpx 0 rgba(255, 255, 255, 0.92);
-  box-sizing: border-box;
-}
-
-.mascot-cover {
-  object-position: center 20%;
-}
-
-/* Cards */
-.cards-2 {
-  display: flex;
-  gap: 18rpx;
-}
-
-.card-lg {
-  flex: 1;
-  height: 280rpx;
-  border-radius: 36rpx;
-  overflow: hidden;
-  position: relative;
-  background: #fff;
-  box-shadow: 0 16rpx 36rpx rgba(70, 100, 140, 0.12);
-}
-
-.cards-3 {
-  display: flex;
-  gap: 16rpx;
-  margin-top: 16rpx;
-}
-
-.card-sm {
-  flex: 1;
-  height: 200rpx;
-  border-radius: 32rpx;
-  overflow: hidden;
-  position: relative;
-  background: #fff;
-  box-shadow: 0 14rpx 30rpx rgba(70, 100, 140, 0.1);
-}
-
-.card-img {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-/* 毛玻璃胶囊 —— 对齐 PetMeet 磨砂 */
-.pill {
-  position: absolute;
-  left: 18rpx;
-  bottom: 18rpx;
-  max-width: calc(100% - 36rpx);
-  height: 64rpx;
-  padding: 0 10rpx 0 22rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.32);
-  border: 1rpx solid rgba(255, 255, 255, 0.68);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  box-shadow:
-    0 8rpx 22rpx rgba(40, 60, 90, 0.12),
-    inset 0 1rpx 0 rgba(255, 255, 255, 0.85);
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  box-sizing: border-box;
-}
-
-.pill.sm {
-  left: 12rpx;
-  bottom: 14rpx;
+.brand-mark {
+  width: 52rpx;
   height: 52rpx;
-  padding: 0 8rpx 0 16rpx;
-  max-width: calc(100% - 24rpx);
 }
 
-.pill-txt {
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #1f2430;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.brand-name {
+  font-size: var(--font-md);
+  font-weight: 800;
+  color: var(--color-title);
+  letter-spacing: 2rpx;
 }
 
-.pill.sm .pill-txt {
-  font-size: 22rpx;
+/* —— 问候 —— */
+.greet {
+  margin-top: var(--space-4);
 }
 
-.pill-go {
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 50%;
+.greet-title {
+  margin: 6rpx 0 4rpx;
+}
+
+/* —— 街角 —— */
+.hero {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+}
+
+.hero-art {
+  display: block;
+  width: 100%;
+  border-radius: var(--radius-md);
+}
+
+.hero-stats {
+  margin: var(--space-3) 0;
+  padding: var(--space-2) var(--space-1);
+  border-top: 2rpx dashed var(--color-line);
+  border-bottom: 2rpx dashed var(--color-line);
+}
+
+.hs {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8rpx;
+}
+
+.hs-num {
+  font-size: var(--font-xl);
+  font-weight: 800;
+  color: var(--color-primary-ink);
+}
+
+.hs-unit {
+  font-size: var(--font-xs);
+  color: var(--color-text-2);
+}
+
+.hs-sep {
+  width: 2rpx;
+  height: 40rpx;
+  background: var(--color-line);
+}
+
+.cta-ico {
+  width: 40rpx;
+  height: 40rpx;
+}
+
+/* —— 我的猫现在 —— */
+.now {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+}
+
+.now-pic {
+  width: 132rpx;
+  height: 132rpx;
   flex-shrink: 0;
-  background: linear-gradient(180deg, #5aef9a 0%, #2fd074 100%);
-  color: #102418;
-  font-size: 34rpx;
-  font-weight: 700;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-deep);
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
-  box-shadow: 0 6rpx 12rpx rgba(47, 208, 116, 0.35);
+  position: relative;
 }
 
-.pill.sm .pill-go {
-  width: 36rpx;
-  height: 36rpx;
-  font-size: 28rpx;
+.now-img {
+  width: 112rpx;
+  height: 112rpx;
 }
 
-.recent {
-  margin-top: 36rpx;
+.now-away {
+  background: var(--color-sky-soft);
 }
 
-.recent-title {
-  font-size: 30rpx;
+.now-paw {
+  position: absolute;
+  width: 34rpx;
+  height: 34rpx;
+  opacity: 0.75;
+}
+
+.now-paw.p1 { left: 18rpx; bottom: 18rpx; transform: rotate(20deg); }
+.now-paw.p2 { left: 52rpx; top: 46rpx; transform: rotate(32deg); }
+.now-paw.p3 { right: 16rpx; top: 14rpx; transform: rotate(40deg); }
+
+/* —— 明信片 / 便签 —— */
+.report {
+  margin-top: var(--space-3);
+}
+
+.report-stamp {
+  flex-shrink: 0;
+  width: 112rpx;
+  height: 112rpx;
+}
+
+.visit {
+  margin-top: var(--space-3);
+}
+
+.visit-title {
+  font-family: var(--font-body);
+  font-size: var(--font-md);
   font-weight: 800;
-  color: #1f2430;
-  margin-bottom: 16rpx;
+  color: var(--color-title);
 }
 
-.recent-scroll {
-  width: 100%;
+.visit-body {
+  margin-top: 6rpx;
+  font-size: var(--font-md);
+  line-height: 1.6;
+}
+
+.visit-go {
+  margin-top: var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--font-sm);
+  font-weight: 700;
+  color: var(--color-primary-ink);
+}
+
+/* —— 最近遇见 —— */
+.recent {
+  margin: 0 calc(-1 * var(--space-4));
+  width: auto;
+  white-space: nowrap;
 }
 
 .recent-row {
   display: flex;
-  gap: 16rpx;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4) var(--space-3);
 }
 
-.recent-item {
-  width: 236rpx;
+.rc {
   flex-shrink: 0;
+  width: 220rpx;
+  padding: var(--space-2) var(--space-2) var(--space-3);
+  box-sizing: border-box;
 }
 
-.mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(25, 35, 55, 0.42);
-  z-index: 2000;
+.rc-pic {
+  height: 200rpx;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-deep);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 48rpx;
-  box-sizing: border-box;
 }
 
-.dialog {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 36rpx;
-  padding: 44rpx 36rpx;
-  box-sizing: border-box;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  box-shadow: 0 24rpx 60rpx rgba(40, 60, 90, 0.2);
+.rc-img {
+  width: 170rpx;
+  height: 170rpx;
 }
 
-.dialog-title {
-  text-align: center;
-  font-size: 34rpx;
+.rc-name {
+  margin-top: var(--space-2);
+  font-size: var(--font-md);
+  font-weight: 700;
+  color: var(--color-title);
+}
+
+.recent-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.re-illus {
+  width: 200rpx;
+  height: 166rpx;
+  flex-shrink: 0;
+}
+
+/* —— 翻翻手帐 —— */
+.more-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4rpx;
+  padding: var(--space-3);
+}
+
+.more-ico {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-1);
+}
+
+.more-ico image {
+  width: 38rpx;
+  height: 38rpx;
+}
+
+.more-t {
+  font-size: var(--font-md);
   font-weight: 800;
-  color: #1f2430;
+  color: var(--color-title);
 }
 
-.dialog-body {
-  margin-top: 20rpx;
-  font-size: 26rpx;
-  color: #4a5568;
-  line-height: 1.65;
-}
-
-.dialog-link {
-  display: block;
-  margin: 22rpx 0 28rpx;
+/* —— 隐私弹窗 —— */
+.privacy {
+  position: relative;
   text-align: center;
-  color: #2fd074;
-  font-size: 26rpx;
-  font-weight: 600;
+}
+
+.privacy-art {
+  width: 120rpx;
+  height: 120rpx;
+  margin: 0 auto var(--space-2);
+  display: block;
+}
+
+.privacy-link {
+  margin-top: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--color-primary-ink);
+  text-decoration: underline;
 }

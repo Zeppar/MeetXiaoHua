@@ -4,6 +4,12 @@ const { formatDateTime } = require('../../utils/format')
 const copy = require('../../constants/copy')
 const pageLoad = require('../../utils/page-load')
 
+/** 展示用：从「3.2 千米外的小屋」里取出数字，放进距离邮戳；关了距离则为空 */
+function pickKm(label) {
+  const m = String(label || '').match(/\d+(\.\d+)?/)
+  return m ? m[0] : ''
+}
+
 Page({
   data: {
     logs: [],
@@ -37,7 +43,8 @@ Page({
       this.setData({
         logs: (logs || []).map((l) => ({
           ...l,
-          timeLabel: formatDateTime(l.returnedAt || l.leftAt)
+          timeLabel: formatDateTime(l.returnedAt || l.leftAt),
+          distKm: pickKm(l.distanceLabel)
         })),
         ready: true
       })

@@ -845,7 +845,7 @@ async function listVisitLogs({ direction } = {}) {
       const interactLine = buildInteractLine(l.pet, l.fed, l.adopted)
       const title =
         l.direction === 'outbound'
-          ? `你的${l.name || l.breed || '小猫'}去串门了`
+          ? `你的${l.name || (['待识别', '识别中…', '未知小动物'].indexOf(l.breed) >= 0 ? '' : l.breed) || '小猫'}去串门了`
           : `${l.fromReleased ? '流浪的' : ''}${l.name || l.breed || '小猫'}来过`
       const summary =
         l.direction === 'outbound'

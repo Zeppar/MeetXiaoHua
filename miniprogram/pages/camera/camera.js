@@ -5,6 +5,7 @@ const { blurCoordinate, isValidGeo, getCurrentPosition } = require('../../utils/
 const nav = require('../../utils/navigate')
 const { makeStickerWithCloudMatting } = require('../../services/cloud-matting')
 const mattingMode = require('../../constants/matting-mode')
+const { isDevBuild } = require('../../utils/env')
 
 // false：暂关闭云识别，只做抠图白边；改回 true 恢复识别
 const RECOGNITION_ENABLED = true
@@ -30,6 +31,13 @@ function formatMs(ms) {
   const n = Math.max(0, Number(ms) || 0)
   if (n >= 1000) return `${(n / 1000).toFixed(1)}s`
   return `${Math.round(n)}ms`
+}
+
+/** 邮戳上的日期，如 11.20 */
+function stampDateText(d = new Date()) {
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}.${dd}`
 }
 
 /** 把 timing 字符串数组解析成步骤列表 + 总耗时 */
@@ -69,6 +77,8 @@ function buildTimingView(timingLines, fallbackTotalMs) {
 
 Page({
   data: {
+    // 耗时明细、抠图类型切换只给开发者看：开发版（含开发者工具）显示，体验版/正式版隐藏
+    showTiming: isDevBuild(),
     state: 'ready', // ready | recognizing | preview | fail
     tempPath: '',
     result: null,
@@ -347,6 +357,7 @@ Page({
       const refining = !!(result.needsRefine && typeof result.refine === 'function')
       this.finishRecognize(token, {
         state: 'preview',
+        stampDate: stampDateText(),
         timingSteps: timingView.steps,
         timingTotalText: timingView.totalText || `总耗时 ${formatMs(elapsed)}`,
         timingElapsedText: `已用时 ${(elapsed / 1000).toFixed(1)}s`,
@@ -362,6 +373,8 @@ Page({
           cutoutPath: refining ? tempPath : result.cutoutPath || tempPath,
           originalPath: result.originalPath || tempPath,
           provider: result.provider || '',
+          refining,
+          popSeq: 0,
           refining,
           timing: timingView.lines,
           timingTotalText: timingView.totalText || `总耗时 ${formatMs(elapsed)}`
@@ -600,7 +613,8 @@ Page({
             timingSteps: steps,
             'result.cutoutPath': r.cutoutPath,
             'result.mattingFailed': false,
-            'result.refining': false
+            'result.refining': false,
+            'result.popSeq': ((this.data.result && this.data.result.popSeq) || 0) + 1
           })
         } else {
           steps.push({ text: `后台精修失败: ${(r && r.message) || ''}` })
@@ -608,6 +622,7 @@ Page({
             timingSteps: steps,
             'result.cutoutPath': quickCutoutPath || this.data.tempPath,
             'result.refining': false,
+            'result.popSeq': ((this.data.result && this.data.result.popSeq) || 0) + 1,
             'result.hint': '精细抠图失败，已用快速结果'
           })
         }
@@ -712,7 +727,8 @@ Page({
       geo,
       locating: false,
       locationHint: copy.tips.locationReady,
-      placeText: customPlace || copy.tips.locationReady,
+      // 没填地点就留空（输入框会显示占位提示），别把提示语当地名存下来
+      placeText: customPlace === copy.tips.locationReady ? '' : customPlace,
       showLocationAuth: false
     })
     return true

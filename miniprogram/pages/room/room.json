@@ -1,10 +1,10 @@
 {
   "navigationStyle": "custom",
   "navigationBarTitleText": "我的小屋",
-  "navigationBarBackgroundColor": "#f5f7fa",
-  "backgroundColor": "#f5f7fa",
-  "backgroundColorTop": "#f5f7fa",
-  "backgroundColorBottom": "#f5f7fa",
+  "navigationBarBackgroundColor": "#FBF7F0",
+  "backgroundColor": "#FBF7F0",
+  "backgroundColorTop": "#FBF7F0",
+  "backgroundColorBottom": "#FBF7F0",
   "disableScroll": true,
   "usingComponents": {}
 }

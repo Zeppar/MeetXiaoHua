@@ -21,9 +21,35 @@ function isPendingBreed(breed) {
   return !b || b === '待识别' || b === '识别中…' || b === '未知小动物'
 }
 
+/** 亲密度画成一排 5 个爪印：每 20 点亮一个 */
+const PAW_COUNT = 5
+function pawsOf(value) {
+  const v = Math.max(0, Math.min(100, Number(value) || 0))
+  // 有一点亲密度就亮第一只爪，之后每 20 点再亮一只
+  const lit = v > 0 ? Math.ceil(v / (100 / PAW_COUNT)) : 0
+  const out = []
+  for (let i = 0; i < PAW_COUNT; i++) out.push({ i, on: i < lit })
+  return out
+}
+
+/** 邮戳两行：上「年份」，下「月.日」 */
+function stampOf(shotAt) {
+  const d = shotAt ? new Date(shotAt) : null
+  if (!d || Number.isNaN(d.getTime())) return { stampK: '遇见', stampV: '某天' }
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  return {
+    stampK: String(d.getFullYear()),
+    stampV: `${m < 10 ? '0' + m : m}.${day < 10 ? '0' + day : day}`
+  }
+}
+
 Page({
   data: {
     card: null,
+    intimacyPaws: pawsOf(0),
+    stampK: '遇见',
+    stampV: '某天',
     displayName: '',
     intimacyText: '',
     intimacyValue: 0,
@@ -103,7 +129,11 @@ Page({
         {}
       const occ = roomOccupancy(user)
       const isInRoom = occ.isInRoom(this.cardId)
+      const stamp = stampOf(named.shotAt)
       this.setData({
+        intimacyPaws: pawsOf(bond.value),
+        stampK: stamp.stampK,
+        stampV: stamp.stampV,
         card: named,
         displayName: cardDisplayName(named),
         displayImage: pickCardImage(named),

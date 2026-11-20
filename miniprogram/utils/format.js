@@ -22,15 +22,25 @@ function clampText(text, max) {
 }
 
 /** 展示名：自定义名字优先，否则用识别品种 */
+// 品种的占位值：不能拿来当猫的名字（否则会出现「喵，我是待识别」）
+const PLACEHOLDER_BREEDS = ['待识别', '识别中…', '未知小动物']
+
+function isPlaceholderBreed(breed) {
+  const b = String(breed || '').trim()
+  return !b || PLACEHOLDER_BREEDS.indexOf(b) >= 0
+}
+
 function cardDisplayName(card) {
   if (!card) return ''
   const custom = (card.name || '').trim()
-  return custom || card.breed || '小猫'
+  if (custom) return custom
+  return isPlaceholderBreed(card.breed) ? '小猫' : card.breed
 }
 
 module.exports = {
   formatDateTime,
   formatDateShort,
   clampText,
-  cardDisplayName
+  cardDisplayName,
+  isPlaceholderBreed
 }

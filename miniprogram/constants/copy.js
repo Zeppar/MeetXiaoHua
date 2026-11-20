@@ -2,7 +2,7 @@
 module.exports = {
   brand: '遇见小花猫',
   buttons: {
-    meetCat: '📷 遇见一只猫',
+    meetCat: '遇见一只猫',
     saveAlbum: '保存到图鉴',
     retake: '重拍',
     retakeAgain: '重新拍照',
@@ -73,7 +73,7 @@ module.exports = {
     notePlaceholder: '比如：蹲在便利店门口，不怕人',
     placeTitle: '在哪里遇到的它？',
     placePlaceholder: '比如：小区楼下、公司附近（可选）',
-    useLocation: '📍 重新获取定位',
+    useLocation: '重新获取定位',
     locationTitle: '需要位置权限',
     locationBody:
       '足迹地图要记下相遇位置，才能把猫放上地图。不开定位就无法保存这只猫。请在设置里开启位置权限后重试。',

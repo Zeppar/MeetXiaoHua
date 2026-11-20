@@ -2,6 +2,14 @@ const api = require('../../services/api')
 const copy = require('../../constants/copy')
 const { formatDateTime } = require('../../utils/format')
 const pageLoad = require('../../utils/page-load')
+const { pickCardImage } = require('../../utils/card-media')
+
+// 状态章：审核中 / 已通过 / 未通过（只做展示）
+const STATUS_SEAL = {
+  pending: { text: '审核中', cls: 'seal-blush' },
+  approved: { text: '已通过', cls: 'seal-mint' },
+  rejected: { text: '未通过', cls: 'seal-muted' }
+}
 
 Page({
   data: {
@@ -42,7 +50,8 @@ Page({
               toBreed: c.pendingBreed || '',
               recognizedBreed: c.recognizedBreed || '',
               status: 'pending',
-              createdAt: c.createdAt || Date.now()
+              createdAt: c.createdAt || Date.now(),
+              image: pickCardImage(c) || ''
             }))
         } catch (e) {
           /* ignore */
@@ -51,7 +60,9 @@ Page({
       this.setData({
         list: list.map((r) => ({
           ...r,
-          timeLabel: formatDateTime(r.createdAt)
+          timeLabel: formatDateTime(r.createdAt),
+          statusText: (STATUS_SEAL[r.status] || STATUS_SEAL.pending).text,
+          statusCls: (STATUS_SEAL[r.status] || STATUS_SEAL.pending).cls
         })),
         empty: !list.length,
         ready: true

@@ -1,16 +1,36 @@
-<view class="page about">
-  <view class="hero">
-    <image class="hero-img" src="/assets/illus/hero-globe.jpg" mode="aspectFill" />
-    <view class="hero-mask"></view>
-    <view class="hero-copy">
-      <view class="brand">遇见小花猫</view>
-      <view class="slogan">拍下你遇到的猫，收进你的小屋</view>
+<view class="page page-sub about">
+  <view class="hero paper anim-rise">
+    <view class="tape tape-left"></view>
+    <view class="tape tape-sky tape-right"></view>
+    <image class="hero-img" src="/assets/art/hero-corner.svg" mode="widthFix" />
+  </view>
+
+  <view class="brand anim-rise delay-1">
+    <image class="brand-logo" src="/assets/art/logo-mark.svg" mode="aspectFit" />
+    <view class="brand-copy">
+      <view class="h1"><text class="marker">遇见小花猫</text></view>
+      <view class="hand brand-slogan">拍下你遇到的猫，收进你的小屋</view>
     </view>
   </view>
 
-  <view class="card">
-    <view class="row"><text class="k">版本</text><text class="v">{{version}}</text></view>
-    <view class="row"><text class="k">定位</text><text class="v">记录生活里的猫瞬间</text></view>
-    <view class="row"><text class="k">开发者</text><text class="v">MeetXiaoHua</text></view>
+  <view class="paper story lined hand anim-rise delay-2">
+    <view>街角、楼下、便利店门口，总有一只猫在等你路过。</view>
+    <view>拍下它，它就变成一张白边贴纸，贴进你的手帐。</view>
+    <view>它会在你的小屋里打盹，偶尔出门串串门，带回一点远方的消息。</view>
+  </view>
+
+  <view class="list info anim-rise delay-3">
+    <view class="list-row">
+      <view class="list-title">版本</view>
+      <view class="list-sub num">{{version}}</view>
+    </view>
+    <view class="list-row">
+      <view class="list-title">定位</view>
+      <view class="list-sub">记录生活里的猫瞬间</view>
+    </view>
+    <view class="list-row">
+      <view class="list-title">开发者</view>
+      <view class="list-sub">MeetXiaoHua</view>
+    </view>
   </view>
 </view>

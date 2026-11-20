@@ -1,58 +1,132 @@
-.history {
-  background: #f5f7fa !important;
-}
+/* 它的出门记录：一张张寄回来的明信片 */
 
 .head {
-  margin-bottom: 24rpx;
+  margin: var(--space-2) 0 var(--space-4);
 }
 
-.head-title {
-  font-size: 40rpx;
-  font-weight: 800;
-  color: #1f2430;
+/* —— 时间线：左侧虚线 + 圆点，右侧一张张明信片 —— */
+.timeline {
+  position: relative;
+  padding-left: 44rpx;
 }
 
-.head-sub {
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #8b95a5;
+.timeline::before {
+  content: "";
+  position: absolute;
+  top: 24rpx;
+  bottom: 24rpx;
+  left: 12rpx;
+  border-left: 3rpx dashed var(--color-line);
 }
 
-.list {
+.tl-item {
+  position: relative;
+  margin-bottom: var(--space-4);
+}
+
+.tl-item:last-child {
+  margin-bottom: 0;
+}
+
+.tl-dot {
+  position: absolute;
+  top: 40rpx;
+  left: -44rpx;
+  width: 22rpx;
+  height: 22rpx;
+  border-radius: 50%;
+  border: 4rpx solid var(--color-surface);
+  box-shadow: 0 0 0 3rpx var(--color-title);
+}
+
+.tl-dot-sky { background: var(--color-sky); }
+.tl-dot-blush { background: var(--color-blush); }
+
+.log-card {
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+}
+
+.log-head {
   display: flex;
-  flex-direction: column;
-  gap: 16rpx;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
-.item {
-  background: #fff;
-  border-radius: 28rpx;
-  padding: 24rpx;
-  box-shadow: 0 12rpx 28rpx rgba(70, 100, 140, 0.08);
+.log-time {
+  flex-shrink: 0;
 }
 
-.time {
-  font-size: 22rpx;
-  color: #8b95a5;
-  margin-bottom: 10rpx;
+.log-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
-.line {
-  font-size: 28rpx;
-  color: #1f2430;
-  line-height: 1.6;
-  margin-top: 4rpx;
-  font-weight: 600;
+.log-cat {
+  width: 120rpx;
+  height: 120rpx;
+  flex-shrink: 0;
 }
 
-.muted {
-  color: #8b95a5;
-  font-weight: 500;
+.log-body {
+  flex: 1;
+  min-width: 0;
 }
 
-.empty-card {
-  background: #fff;
-  border-radius: 36rpx;
-  box-shadow: 0 16rpx 36rpx rgba(70, 100, 140, 0.1);
-  padding: 24rpx 12rpx;
+.log-title {
+  font-size: var(--font-md);
+  line-height: 1.45;
+}
+
+/* 距离邮戳：出门天蓝、来访樱粉 */
+.log-stamp {
+  width: 112rpx;
+  height: 112rpx;
+  flex-shrink: 0;
+}
+
+.log-stamp .stamp-v {
+  font-size: var(--font-md);
+}
+
+.stamp-sky {
+  color: var(--color-sky-ink);
+  border-color: rgba(58, 110, 168, 0.7);
+  box-shadow: inset 0 0 0 7rpx var(--color-surface), inset 0 0 0 9rpx rgba(58, 110, 168, 0.4);
+}
+
+.stamp-blush {
+  color: var(--color-blush-ink);
+  border-color: rgba(184, 80, 106, 0.7);
+  box-shadow: inset 0 0 0 7rpx var(--color-surface), inset 0 0 0 9rpx rgba(184, 80, 106, 0.4);
+}
+
+.log-behavior {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 2rpx dashed var(--color-line);
+  font-size: var(--font-md);
+  color: var(--color-text);
+  line-height: 1.65;
+}
+
+.log-interact {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: var(--space-1);
+  font-size: var(--font-sm);
+  color: var(--color-blush-ink);
+}
+
+.log-paw {
+  width: 30rpx;
+  height: 30rpx;
+  flex-shrink: 0;
+}
+
+.empty-wrap {
+  margin-top: var(--space-4);
 }

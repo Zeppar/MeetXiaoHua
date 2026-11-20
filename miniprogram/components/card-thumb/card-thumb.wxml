@@ -1,10 +1,12 @@
-<view class="thumb" bindtap="onTap">
+<view class="thumb paper" hover-class="tap-press" bindtap="onTap">
   <view class="thumb-img-wrap">
-    <image wx:if="{{image}}" class="thumb-img" src="{{image}}" mode="aspectFill" />
-    <view wx:else class="thumb-placeholder"></view>
-    <view wx:if="{{memoryCount > 0}}" class="badge">记 {{memoryCount}}</view>
+    <image wx:if="{{image}}" class="thumb-img sticker" src="{{image}}" mode="aspectFit" />
+    <image wx:else class="thumb-img thumb-ph" src="/assets/art/cat-shadow.svg" mode="aspectFit" />
   </view>
-  <view class="thumb-breed">{{breed}}</view>
-  <view wx:if="{{date}}" class="thumb-date">{{date}}</view>
-  <view wx:if="{{place}}" class="thumb-place">{{place}}</view>
+  <view class="thumb-breed ellipsis">{{breed}}</view>
+  <view class="row-between">
+    <text wx:if="{{date}}" class="tiny">{{date}}</text>
+    <text wx:if="{{memoryCount > 0}}" class="tag tag-blush">{{memoryCount}} 条记忆</text>
+  </view>
+  <view wx:if="{{place}}" class="tiny ellipsis">{{place}}</view>
 </view>

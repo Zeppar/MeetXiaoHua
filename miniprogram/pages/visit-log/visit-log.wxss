@@ -1,177 +1,182 @@
-.visit-log {
-  min-height: 100vh;
-  background: #f5f7fa;
-  padding: 28rpx 28rpx calc(48rpx + env(safe-area-inset-bottom));
-  box-sizing: border-box;
-}
+/* 猫猫出门记录：出门 / 来访的明信片时间线 */
 
 .head {
-  margin-bottom: 18rpx;
-}
-
-.head-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16rpx;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-3);
 }
 
-.head-title {
-  font-size: 36rpx;
-  font-weight: 800;
-  color: #1f2430;
-}
-
-.head-sub {
-  margin-top: 6rpx;
-  font-size: 22rpx;
-  color: #8b95a5;
-}
-
-.settings-entry {
-  flex-shrink: 0;
-  margin-top: 4rpx;
-  padding: 10rpx 18rpx;
-  border-radius: 999rpx;
-  background: #fff;
-  color: #5a6575;
-  font-size: 22rpx;
-  font-weight: 700;
-  box-shadow: 0 6rpx 14rpx rgba(70, 100, 140, 0.06);
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-}
-
-.settings-caret {
-  font-size: 18rpx;
-  color: #8b95a5;
-}
-
-.group {
-  background: #fff;
-  border-radius: 24rpx;
-  box-shadow: 0 10rpx 22rpx rgba(70, 100, 140, 0.07);
-  overflow: hidden;
-  margin-bottom: 18rpx;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-  padding: 18rpx 22rpx;
-  border-bottom: 2rpx solid rgba(120, 140, 170, 0.08);
-}
-
-.row.last {
-  border-bottom: none;
-}
-
-.row-main {
+.head-copy {
   flex: 1;
   min-width: 0;
 }
 
-.row-title {
-  font-size: 26rpx;
-  color: #1f2430;
-  font-weight: 700;
+.settings-entry {
+  flex-shrink: 0;
+  margin-top: 8rpx;
+  gap: 12rpx;
 }
 
-.row-tip {
+/* 小三角：CSS 画的 V，展开时朝上 */
+.caret {
+  width: 10rpx;
+  height: 10rpx;
+  border-right: 3rpx solid currentColor;
+  border-bottom: 3rpx solid currentColor;
+  transform: translateY(-3rpx) rotate(45deg);
+  transition: transform 0.2s ease;
+}
+
+.caret-up {
+  transform: translateY(3rpx) rotate(-135deg);
+}
+
+.settings {
+  margin-bottom: var(--space-3);
+}
+
+.set-row-tall {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+.set-tip {
   margin-top: 4rpx;
-  font-size: 20rpx;
-  color: #8b95a5;
-  line-height: 1.35;
+  font-size: var(--font-xs);
+  line-height: 1.5;
 }
 
 .tabs {
   display: flex;
-  gap: 12rpx;
-  margin-bottom: 20rpx;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
-.tab {
-  padding: 12rpx 22rpx;
-  border-radius: 999rpx;
-  background: #fff;
-  color: #5a6575;
-  font-size: 24rpx;
-  font-weight: 700;
-  box-shadow: 0 6rpx 14rpx rgba(70, 100, 140, 0.06);
+/* —— 时间线：左侧虚线 + 圆点，右侧一张张明信片 —— */
+.timeline {
+  position: relative;
+  padding-left: 44rpx;
 }
 
-.tab.on {
-  background: #edfbf3;
-  color: #1a8f4c;
+.timeline::before {
+  content: "";
+  position: absolute;
+  top: 24rpx;
+  bottom: 24rpx;
+  left: 12rpx;
+  border-left: 3rpx dashed var(--color-line);
 }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
+.tl-item {
+  position: relative;
+  margin-bottom: var(--space-4);
 }
 
-.item {
-  background: #fff;
-  border-radius: 28rpx;
-  padding: 24rpx;
-  box-shadow: 0 12rpx 28rpx rgba(70, 100, 140, 0.08);
+.tl-item:last-child {
+  margin-bottom: 0;
 }
 
-.item-top {
+.tl-dot {
+  position: absolute;
+  top: 40rpx;
+  left: -44rpx;
+  width: 22rpx;
+  height: 22rpx;
+  border-radius: 50%;
+  border: 4rpx solid var(--color-surface);
+  box-shadow: 0 0 0 3rpx var(--color-title);
+}
+
+.tl-dot-sky { background: var(--color-sky); }
+.tl-dot-blush { background: var(--color-blush); }
+
+.log-card {
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+}
+
+.log-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10rpx;
+  gap: var(--space-2);
 }
 
-.chip {
-  padding: 4rpx 12rpx;
-  border-radius: 999rpx;
-  font-size: 20rpx;
-  font-weight: 800;
+.log-time {
+  flex-shrink: 0;
 }
 
-.chip-outbound {
-  background: rgba(47, 208, 116, 0.14);
-  color: #1a8f4c;
+.log-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
-.chip-inbound {
-  background: rgba(94, 200, 232, 0.16);
-  color: #1a7a96;
+.log-cat {
+  width: 120rpx;
+  height: 120rpx;
+  flex-shrink: 0;
 }
 
-.time {
-  font-size: 22rpx;
-  color: #8b95a5;
+.log-body {
+  flex: 1;
+  min-width: 0;
 }
 
-.title {
-  font-size: 30rpx;
-  font-weight: 800;
-  color: #1f2430;
+.log-title {
+  font-size: var(--font-md);
+  line-height: 1.45;
 }
 
-.line {
-  margin-top: 6rpx;
-  font-size: 26rpx;
-  color: #3d4654;
-  line-height: 1.55;
-  font-weight: 600;
+/* 距离邮戳：出门天蓝、来访樱粉 */
+.log-stamp {
+  width: 112rpx;
+  height: 112rpx;
+  flex-shrink: 0;
 }
 
-.muted {
-  color: #8b95a5;
-  font-weight: 500;
+.log-stamp .stamp-v {
+  font-size: var(--font-md);
 }
 
-.empty-card {
-  background: #fff;
-  border-radius: 28rpx;
-  box-shadow: 0 10rpx 24rpx rgba(70, 100, 140, 0.07);
-  padding: 12rpx 8rpx 8rpx;
+.stamp-sky {
+  color: var(--color-sky-ink);
+  border-color: rgba(58, 110, 168, 0.7);
+  box-shadow: inset 0 0 0 7rpx var(--color-surface), inset 0 0 0 9rpx rgba(58, 110, 168, 0.4);
+}
+
+.stamp-blush {
+  color: var(--color-blush-ink);
+  border-color: rgba(184, 80, 106, 0.7);
+  box-shadow: inset 0 0 0 7rpx var(--color-surface), inset 0 0 0 9rpx rgba(184, 80, 106, 0.4);
+}
+
+.log-behavior {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 2rpx dashed var(--color-line);
+  font-size: var(--font-md);
+  color: var(--color-text);
+  line-height: 1.65;
+}
+
+.log-interact {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: var(--space-1);
+  font-size: var(--font-sm);
+  color: var(--color-blush-ink);
+}
+
+.log-paw {
+  width: 30rpx;
+  height: 30rpx;
+  flex-shrink: 0;
+}
+
+.empty-wrap {
+  margin-top: var(--space-4);
 }

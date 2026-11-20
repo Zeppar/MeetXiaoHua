@@ -1,30 +1,27 @@
 <view class="dock-wrap {{hidden ? 'is-hidden' : ''}}">
   <view class="dock">
-    <view class="item {{selected === 0 ? 'on' : ''}}" data-path="/pages/home/home" data-index="0" bindtap="onSwitch">
-      <view class="ico ico-home"></view>
+    <view class="item {{selected === 0 ? 'on' : ''}}" hover-class="item-press" data-path="/pages/home/home" data-index="0" bindtap="onSwitch">
+      <image class="ico" src="/assets/icons/{{selected === 0 ? 'home-on' : 'home'}}.svg" />
+      <text class="label">首页</text>
     </view>
-    <view class="item {{selected === 1 ? 'on' : ''}}" data-path="/pages/album/album" data-index="1" bindtap="onSwitch">
-      <view class="ico ico-paw">
-        <view class="paw-toe toe1"></view>
-        <view class="paw-toe toe2"></view>
-        <view class="paw-toe toe3"></view>
-        <view class="paw-toe toe4"></view>
-        <view class="paw-pad"></view>
-      </view>
+    <view class="item {{selected === 1 ? 'on' : ''}}" hover-class="item-press" data-path="/pages/album/album" data-index="1" bindtap="onSwitch">
+      <image class="ico" src="/assets/icons/{{selected === 1 ? 'album-on' : 'album'}}.svg" />
+      <text class="label">图鉴</text>
     </view>
 
-    <view class="plus-wrap" bindtap="onShoot">
+    <view class="plus-wrap" hover-class="plus-press" bindtap="onShoot">
       <view class="plus">
-        <view class="plus-h"></view>
-        <view class="plus-v"></view>
+        <image class="plus-ico" src="/assets/icons/camera-white.svg" />
       </view>
     </view>
 
-    <view class="item {{selected === 2 ? 'on' : ''}}" data-path="/pages/room/room" data-index="2" bindtap="onSwitch">
-      <view class="ico ico-msg"></view>
+    <view class="item {{selected === 2 ? 'on' : ''}}" hover-class="item-press" data-path="/pages/room/room" data-index="2" bindtap="onSwitch">
+      <image class="ico" src="/assets/icons/{{selected === 2 ? 'room-on' : 'room'}}.svg" />
+      <text class="label">小屋</text>
     </view>
-    <view class="item {{selected === 3 ? 'on' : ''}}" data-path="/pages/profile/profile" data-index="3" bindtap="onSwitch">
-      <view class="ico ico-me"></view>
+    <view class="item {{selected === 3 ? 'on' : ''}}" hover-class="item-press" data-path="/pages/profile/profile" data-index="3" bindtap="onSwitch">
+      <image class="ico" src="/assets/icons/{{selected === 3 ? 'profile-on' : 'profile'}}.svg" />
+      <text class="label">我的</text>
     </view>
   </view>
 </view>

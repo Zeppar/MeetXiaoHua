@@ -521,7 +521,11 @@ Page({
       typeof geo.lat === 'number' && typeof geo.lng === 'number'
         ? `${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}`
         : ''
+    // 邮戳展示用：dateShort 形如 2026.11.20 → 年 2026 / 月日 11.20
+    const dateShortText = formatDateShort(card.shotAt) || ''
     return {
+      stampYear: dateShortText ? dateShortText.slice(0, 4) : '',
+      stampMd: dateShortText ? dateShortText.slice(5) : '',
       id: card._id,
       image: pickCardImage(card),
       name: cardDisplayName(card),
@@ -530,7 +534,7 @@ Page({
       confidence: conf > 0 ? conf : 0,
       date: formatDateTime(card.shotAt) || '时间未记录',
       dateShort: formatDateShort(card.shotAt) || '',
-      place: (card.placeText || '').trim(),
+      place: (card.placeText || '').trim() === '已记录当前位置' ? '' : (card.placeText || '').trim(),
       geoLabel,
       note: (card.note || '').trim(),
       memoryCount: Number(card.memoryCount) || 0,

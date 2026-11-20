@@ -1,1 +1,7 @@
-<view class="page settings"></view>
+<view class="page page-sub settings">
+  <view class="paper paper-pad hint anim-rise">
+    <image class="hint-cat" src="/assets/art/cat-sit.svg" mode="aspectFit" />
+    <view class="h3 mt-3">设置搬家啦</view>
+    <view class="caption mt-1">出门和串门的开关，现在都在「猫猫出门记录」里</view>
+  </view>
+</view>

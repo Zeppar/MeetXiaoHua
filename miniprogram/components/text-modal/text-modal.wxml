@@ -1,26 +1,33 @@
 <view wx:if="{{show}}" class="mask" catchtouchmove="noop" bindtap="onCancel">
-  <view class="panel" catchtap="noop">
-    <view class="panel-title">{{title}}</view>
-    <view wx:if="{{desc}}" class="panel-desc">{{desc}}</view>
-    <textarea
-      wx:if="{{mode === 'textarea' || mode === 'input'}}"
-      class="panel-input"
-      maxlength="{{maxlength}}"
-      placeholder="{{placeholder}}"
-      value="{{value}}"
-      bindinput="onInput"
-      auto-height
-      fixed
-      show-confirm-bar="{{false}}"
-      adjust-position
-      cursor-spacing="24"
-    />
-    <view wx:if="{{mode === 'textarea' || mode === 'input'}}" class="counter">{{value.length}}/{{maxlength}}</view>
-    <view wx:if="{{extra}}" class="extra" bindtap="onExtra">{{extra}}</view>
+  <view class="dialog tm" catchtap="noop">
+    <view class="tape tape-mint"></view>
+    <view class="dialog-title">{{title}}</view>
+    <view wx:if="{{desc}}" class="dialog-body">{{desc}}</view>
+    <!-- 输入区做成横线本：写下的字像落在纸上 -->
+    <view wx:if="{{mode === 'textarea' || mode === 'input'}}" class="tm-field lined">
+      <textarea
+        class="tm-input hand"
+        maxlength="{{maxlength}}"
+        placeholder="{{placeholder}}"
+        placeholder-class="tm-ph"
+        value="{{value}}"
+        bindinput="onInput"
+        auto-height
+        fixed
+        show-confirm-bar="{{false}}"
+        adjust-position
+        cursor-spacing="24"
+      />
+    </view>
+    <view wx:if="{{mode === 'textarea' || mode === 'input'}}" class="tm-counter tiny">{{value.length}}/{{maxlength}}</view>
+    <view wx:if="{{extra}}" class="tm-extra" hover-class="tap-press" bindtap="onExtra">
+      <image class="tm-extra-ico" src="/assets/icons/outing.svg" />
+      <text>{{extra}}</text>
+    </view>
     <slot />
-    <view class="actions">
-      <button class="act" bindtap="onCancel">{{cancelText}}</button>
-      <button class="act-main" bindtap="onConfirm">{{confirmText}}</button>
+    <view class="dialog-actions">
+      <button class="btn-secondary" bindtap="onCancel">{{cancelText}}</button>
+      <button class="btn-primary" bindtap="onConfirm">{{confirmText}}</button>
     </view>
   </view>
 </view>

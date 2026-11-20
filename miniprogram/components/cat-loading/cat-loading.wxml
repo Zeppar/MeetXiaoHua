@@ -1,12 +1,15 @@
-<!-- 用 hidden 而非 wx:if，避免首屏创建/销毁组件触发渲染层同步错误 -->
+<!-- 用 class 切显隐而非 wx:if，避免首屏创建/销毁组件触发渲染层同步错误；不用 hidden，因为 display:flex 会盖过 hidden -->
 <view
-  class="cat-loading {{fullscreen ? 'is-full' : 'is-inline'}}"
-  hidden="{{!show}}"
+  class="cat-loading {{fullscreen ? 'is-full' : 'is-inline'}} {{show ? '' : 'is-off'}}"
   catchtouchmove="noop"
 >
   <view class="panel">
-    <view class="spin-ring">
-      <image class="loading-img" src="/assets/illus/loading.png" mode="aspectFit" />
+    <!-- 加载 = 一串爪印依次踩过 -->
+    <view class="paws">
+      <image class="paw p1" src="/assets/icons/paw.svg" />
+      <image class="paw p2" src="/assets/icons/paw.svg" />
+      <image class="paw p3" src="/assets/icons/paw.svg" />
+      <image class="paw p4" src="/assets/icons/paw.svg" />
     </view>
     <view wx:if="{{text}}" class="tip">{{text}}</view>
   </view>

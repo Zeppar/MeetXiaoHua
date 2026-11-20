@@ -1,90 +1,125 @@
-.breed-review {
-  min-height: 100vh;
-  background: #f5f7fa;
-  padding: 28rpx 28rpx calc(48rpx + env(safe-area-inset-bottom));
-  box-sizing: border-box;
-}
+/* 品种审核 · 猫咪相遇手帐 */
 
 .head {
-  margin-bottom: 24rpx;
+  margin-bottom: var(--space-5);
 }
 
-.head-title {
-  font-size: 40rpx;
-  font-weight: 800;
-  color: #1f2430;
-}
-
-.head-sub {
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #8b95a5;
-}
-
-.list {
+.review-list {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: var(--space-5);
 }
 
-.item {
-  background: #fff;
-  border-radius: 28rpx;
-  padding: 24rpx;
-  box-shadow: 0 12rpx 28rpx rgba(70, 100, 140, 0.08);
+.review-item {
+  padding: var(--space-4) var(--space-4) var(--space-3);
 }
 
-.time {
-  font-size: 22rpx;
-  color: #8b95a5;
-  margin-bottom: 10rpx;
-}
-
-.line {
-  font-size: 28rpx;
-  color: #1f2430;
-  font-weight: 700;
-  line-height: 1.5;
-}
-
-.muted {
-  color: #8b95a5;
-  font-weight: 500;
-  font-size: 24rpx;
-  margin-top: 4rpx;
-}
-
-.ops {
-  margin-top: 20rpx;
+.review-top {
   display: flex;
-  gap: 16rpx;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.review-thumb {
+  flex-shrink: 0;
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(rgba(120, 95, 70, 0.1) 2rpx, transparent 2rpx) 0 0 / 20rpx 20rpx,
+    var(--color-bg-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.review-img {
+  width: 88%;
+  height: 88%;
+}
+
+.review-ph {
+  width: 70%;
+  height: 70%;
+  opacity: 0.55;
+}
+
+.review-main {
+  flex: 1;
+  min-width: 0;
+  padding-top: 6rpx;
+}
+
+/* A → B */
+.review-change {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.from {
+  font-size: var(--font-md);
+  color: var(--color-text-2);
+  text-decoration: line-through;
+  text-decoration-color: rgba(154, 143, 132, 0.7);
+}
+
+.from-muted {
+  color: var(--color-muted);
+  text-decoration: none;
+}
+
+.to {
+  font-size: var(--font-lg);
+  font-weight: 800;
+  color: var(--color-title);
+  background: linear-gradient(transparent 58%, rgba(240, 138, 75, 0.28) 58%, rgba(240, 138, 75, 0.28) 92%, transparent 92%);
+  padding: 0 4rpx;
+}
+
+.arrow {
+  display: flex;
+  align-items: center;
+}
+
+.arrow-line {
+  width: 30rpx;
+  height: 4rpx;
+  border-radius: 4rpx;
+  background: var(--color-primary);
+}
+
+.arrow-head {
+  width: 12rpx;
+  height: 12rpx;
+  margin-left: -10rpx;
+  border-top: 4rpx solid var(--color-primary);
+  border-right: 4rpx solid var(--color-primary);
+  transform: rotate(45deg);
+}
+
+.review-time {
+  margin-top: 6rpx;
+}
+
+.review-seal {
+  flex-shrink: 0;
+  margin-top: 6rpx;
+}
+
+.review-ops {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 2rpx dashed var(--color-line);
+  display: flex;
+  gap: var(--space-2);
 }
 
 .op {
   flex: 1;
-  margin: 0;
-  font-size: 26rpx !important;
-  font-weight: 800;
-  border-radius: 999rpx;
-  padding: 14rpx 0 !important;
-  line-height: 1.3;
-}
-
-.op::after { border: none; }
-
-.op.ok {
-  background: linear-gradient(180deg, #5aef9a, #2fd074);
-  color: #102418;
-}
-
-.op.reject {
-  background: #f0f3f7;
-  color: #5a6575;
 }
 
 .empty-card {
-  background: #fff;
-  border-radius: 36rpx;
-  box-shadow: 0 16rpx 36rpx rgba(70, 100, 140, 0.1);
-  padding: 24rpx 12rpx;
+  margin-top: var(--space-3);
 }

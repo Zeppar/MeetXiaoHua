@@ -1,40 +1,54 @@
-<view class="page memory">
-  <view class="header" wx:if="{{card}}">
-    <image class="avatar" src="{{displayImage}}" mode="aspectFill" />
-    <view class="header-breed">{{card.breed}}</view>
+<view class="page page-sub memory">
+  <!-- 页眉：贴着它的照片 -->
+  <view class="header paper anim-rise" wx:if="{{card}}">
+    <view class="header-photo">
+      <view class="tape tape-blush header-tape"></view>
+      <image class="avatar sticker tilt-l" src="{{displayImage}}" mode="aspectFit" />
+    </view>
+    <view class="grow">
+      <view class="h3 ellipsis">和{{displayName || '它'}}的记忆</view>
+      <view class="caption mt-1">{{card.breed}}</view>
+      <view wx:if="{{memories.length}}" class="tiny mt-1">共 {{memories.length}} 段 · 长按一段可删除</view>
+    </view>
   </view>
 
-  <view wx:if="{{ready && memories.length}}" class="timeline">
+  <view wx:if="{{ready && memories.length}}" class="entries">
     <view
       wx:for="{{memories}}"
       wx:key="_id"
-      class="mem-item"
+      class="entry paper lined anim-rise"
       data-id="{{item._id}}"
       bindlongpress="onLongDelete"
     >
-      <view class="mem-time">{{item.timeLabel}}</view>
-      <view class="mem-text">{{item.text}}</view>
-      <image
+      <view class="entry-head">
+        <text class="tag tag-blush">{{item.timeLabel}}</text>
+      </view>
+      <view class="entry-text hand">{{item.text}}</view>
+      <view
         wx:if="{{item.imagePath}}"
-        class="mem-img"
-        src="{{item.imagePath}}"
-        mode="aspectFill"
+        class="polaroid {{index % 2 === 0 ? 'tilt-r' : 'tilt-l'}}"
+        hover-class="tap-press"
         data-src="{{item.imagePath}}"
         bindtap="onPreviewImg"
-      />
+      >
+        <view class="tape {{index % 2 === 0 ? 'tape-mint' : 'tape-sky'}} polaroid-tape"></view>
+        <image class="polaroid-img" src="{{item.imagePath}}" mode="aspectFill" />
+      </view>
     </view>
   </view>
 
   <empty-state
     wx:elif="{{ready}}"
+    illus="/assets/art/empty-memory.svg"
     main="{{emptyMain}}"
     sub="{{emptySub}}"
     button-text="{{addFirst}}"
     bind:action="onAdd"
   />
 
-  <view wx:if="{{ready}}" class="footer safe-bottom">
-    <button class="btn-primary" bindtap="onAdd">{{addText}}</button>
+  <!-- 有记忆时才放底部按钮；空状态自带「添加第一条记忆」，一屏只留一个主按钮 -->
+  <view wx:if="{{ready && memories.length}}" class="footer safe-bottom">
+    <button class="btn-primary btn-block" bindtap="onAdd">{{addText}}</button>
   </view>
 
   <text-modal

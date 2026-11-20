@@ -1,12 +1,13 @@
 const api = require('../../services/api')
 const copy = require('../../constants/copy')
-const { formatDateTime } = require('../../utils/format')
+const { formatDateTime, cardDisplayName } = require('../../utils/format')
 const pageLoad = require('../../utils/page-load')
 
 Page({
   data: {
     card: null,
     displayImage: '',
+    displayName: '',
     memories: [],
     showAdd: false,
     draft: '',
@@ -48,6 +49,7 @@ Page({
       ])
       this.setData({
         card,
+        displayName: cardDisplayName(card),
         displayImage: (card && (card.cutoutPath || card.originalPath)) || '',
         memories: (memories || []).map((m) => ({
           ...m,

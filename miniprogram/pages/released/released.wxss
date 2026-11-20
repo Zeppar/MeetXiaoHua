@@ -1,115 +1,95 @@
-.released {
-  min-height: 100vh;
-  background: #f5f7fa;
-  padding: 28rpx 28rpx calc(48rpx + env(safe-area-inset-bottom));
-  box-sizing: border-box;
-}
+/* 我放生的猫：每只猫是一张寄出去的明信片 */
 
 .head {
-  margin-bottom: 24rpx;
+  margin: var(--space-2) 0 var(--space-4);
 }
 
-.head-title {
-  font-size: 40rpx;
-  font-weight: 800;
-  color: #1f2430;
-}
-
-.head-sub {
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #8b95a5;
-}
-
-.list {
+.cards {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: var(--space-4);
 }
 
-.card {
+.rel-card {
+  padding: var(--space-4) var(--space-4) var(--space-3);
+}
+
+.rel-top {
   display: flex;
-  gap: 20rpx;
-  background: #fff;
-  border-radius: 28rpx;
-  padding: 20rpx;
-  box-shadow: 0 12rpx 28rpx rgba(70, 100, 140, 0.08);
+  align-items: center;
+  justify-content: space-between;
 }
 
-.card-media {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 22rpx;
-  overflow: hidden;
-  background: #eef3f8;
+.rel-k {
+  letter-spacing: 4rpx;
+  font-weight: 700;
+}
+
+.rel-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.rel-media {
+  width: 168rpx;
+  height: 168rpx;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.card-img {
-  width: 100%;
-  height: 100%;
+.rel-img {
+  width: 168rpx;
+  height: 168rpx;
 }
 
-.card-ph {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(160deg, #ffe0d0, #ffb8a8);
+.rel-ph {
+  width: 128rpx;
+  height: 128rpx;
+  opacity: 0.6;
 }
 
-.card-body {
+.rel-body {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 6rpx;
 }
 
-.card-name {
-  font-size: 30rpx;
-  font-weight: 800;
-  color: #1f2430;
+.rel-meta {
+  font-size: var(--font-sm);
+  font-weight: 700;
 }
 
-.card-meta {
-  font-size: 22rpx;
-  color: #5a6575;
+.rel-stamp {
+  width: 120rpx;
+  height: 120rpx;
+  flex-shrink: 0;
 }
 
-.card-meta.muted {
-  color: #8b95a5;
+.rel-stamp .stamp-v {
+  font-size: var(--font-md);
 }
 
-.status {
-  margin-top: 8rpx;
-  align-self: flex-start;
-  padding: 6rpx 14rpx;
-  border-radius: 999rpx;
-  font-size: 22rpx;
-  font-weight: 800;
+.rel-year {
+  font-size: var(--font-2xs);
+  font-weight: 700;
+  line-height: 1.1;
 }
 
-.status-wandering {
-  background: rgba(120, 140, 170, 0.12);
-  color: #5a6575;
+.rel-note {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 2rpx dashed var(--color-line);
+  font-size: var(--font-md);
+  color: var(--color-text-2);
+  line-height: 1.6;
 }
 
-.status-visiting {
-  background: rgba(94, 200, 232, 0.18);
-  color: #1a7a96;
-}
-
-.status-adopted {
-  background: rgba(47, 208, 116, 0.16);
-  color: #1a8f4c;
-}
-
-.empty-card {
-  background: #fff;
-  border-radius: 36rpx;
-  box-shadow: 0 16rpx 36rpx rgba(70, 100, 140, 0.1);
-  padding: 24rpx 12rpx;
+.empty-wrap {
+  margin-top: var(--space-5);
 }

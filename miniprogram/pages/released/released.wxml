@@ -1,32 +1,55 @@
-<view class="page released">
-  <view class="head">
-    <view class="head-title">我放生的猫</view>
-    <view class="head-sub">看看它们还在流浪，还是已有新家</view>
+<view class="page page-sub released">
+  <view class="head anim-rise">
+    <view class="h2">我放生的猫</view>
+    <view class="caption mt-1">看看它们还在流浪，还是已有新家</view>
   </view>
 
-  <view wx:if="{{ready && !empty}}" class="list">
-    <view wx:for="{{list}}" wx:key="_id" class="card">
-      <view class="card-media">
-        <image wx:if="{{item.displayImage}}" class="card-img" src="{{item.displayImage}}" mode="aspectFit" />
-        <view wx:else class="card-ph"></view>
+  <view wx:if="{{ready && !empty}}" class="cards">
+    <view
+      wx:for="{{list}}"
+      wx:key="_id"
+      class="postcard rel-card anim-rise delay-{{index < 3 ? index + 1 : 4}}"
+    >
+      <view class="rel-top">
+        <view class="tiny rel-k">寄出的猫</view>
+        <view class="seal {{item.sealClass}}">{{item.statusLabel}}</view>
       </view>
-      <view class="card-body">
-        <view class="card-name">{{item.displayName}}</view>
-        <view class="card-meta">放生 · {{item.dateLabel}}</view>
-        <view class="card-meta" wx:if="{{item.breed}}">品种 {{item.breed}}</view>
-        <view class="status status-{{item.statusTone}}">{{item.statusLabel}}</view>
-        <view wx:if="{{item.statusTone === 'adopted' && item.adoptLabel}}" class="card-meta muted">
-          {{item.adoptLabel}} 找到新家
+
+      <view class="rel-main">
+        <view class="rel-media">
+          <image
+            wx:if="{{item.displayImage}}"
+            class="rel-img sticker {{index % 2 ? 'tilt-r' : 'tilt-l'}}"
+            src="{{item.displayImage}}"
+            mode="aspectFit"
+          />
+          <image wx:else class="rel-ph" src="/assets/art/cat-shadow.svg" mode="aspectFit" />
         </view>
-        <view wx:elif="{{item.visitCount > 0}}" class="card-meta muted">
-          已串门 {{item.visitCount}} 次
+
+        <view class="rel-body">
+          <view class="h3 ellipsis">{{item.displayName}}</view>
+          <view wx:if="{{item.breed}}" class="caption ellipsis">品种 {{item.breed}}</view>
+          <view wx:if="{{item.statusTone === 'adopted' && item.adoptLabel}}" class="rel-meta ink-mint">
+            {{item.adoptLabel}} 找到新家
+          </view>
+          <view wx:elif="{{item.visitCount > 0}}" class="rel-meta ink-sky">
+            已串门 {{item.visitCount}} 次
+          </view>
+        </view>
+
+        <view class="stamp rel-stamp">
+          <view class="stamp-k">放生</view>
+          <view class="stamp-v num">{{item.stampDay}}</view>
+          <view class="rel-year num">{{item.stampYear}}</view>
         </view>
       </view>
+
+      <view class="hand rel-note">{{item.noteText}}</view>
     </view>
   </view>
 
-  <view wx:elif="{{ready}}" class="empty-card">
-    <empty-state main="还没有放生过小猫" sub="在图鉴里可以放它去外面走走" />
+  <view wx:elif="{{ready}}" class="empty-wrap">
+    <empty-state main="还没有放生过小猫" sub="在图鉴里可以放它去外面走走" illus="/assets/art/empty-mail.svg" />
   </view>
 
   <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />

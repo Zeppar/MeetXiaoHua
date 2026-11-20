@@ -1,62 +1,91 @@
 <view class="page profile">
-  <view class="hero-card">
-    <image class="hero-deco" src="/assets/illus/mini-album.jpg" mode="aspectFill" />
-    <view class="hero-mask"></view>
-    <view class="hero-content">
-      <view class="avatar">{{avatarLetter}}</view>
-      <view class="nickname">{{nickName}}</view>
-      <view class="hero-tip">记录生活里的猫瞬间</view>
+  <!-- 手帐封面 -->
+  <view class="cover paper anim-rise">
+    <view class="tape tape-left"></view>
+    <view class="cover-spine"></view>
+
+    <view class="cover-top">
+      <view class="avatar">
+        <image class="avatar-img" src="/assets/art/logo-mark.svg" mode="aspectFit" />
+        <view class="avatar-letter">{{avatarLetter}}</view>
+      </view>
+      <view class="cover-who">
+        <view class="tiny cover-k">MY CAT JOURNAL</view>
+        <view class="h2 ellipsis">{{nickName}}</view>
+        <view class="hand cover-sub">记录生活里的猫瞬间</view>
+      </view>
+    </view>
+
+    <view class="cover-line"></view>
+
+    <view class="stats">
+      <view class="stat">
+        <view class="stamp stat-stamp">
+          <view class="stamp-k">已记录</view>
+          <view class="stamp-v num">{{stats.cardCount}}</view>
+        </view>
+      </view>
+      <view class="stat">
+        <view class="stamp stat-stamp stat-sky tilt-2">
+          <view class="stamp-k">遇见品种</view>
+          <view class="stamp-v num">{{stats.breedCount}}</view>
+        </view>
+      </view>
+      <view class="stat">
+        <view class="stamp stat-stamp stat-blush tilt-3">
+          <view class="stamp-k">留下记忆</view>
+          <view class="stamp-v num">{{stats.memoryCount}}</view>
+        </view>
+      </view>
+    </view>
+
+    <image class="cover-trail" src="/assets/art/profile-trail.svg" mode="aspectFit" />
+  </view>
+
+  <!-- 目录 -->
+  <view class="section-head anim-rise delay-1">
+    <view class="section-title">手帐目录</view>
+  </view>
+
+  <view class="list anim-rise delay-2">
+    <view class="list-row" hover-class="list-row-press" bindtap="onBreedReview">
+      <view class="list-ico ico-blush"><image src="/assets/icons/review.svg" /></view>
+      <view class="list-title">品种审核</view>
+      <view class="list-arrow"></view>
+    </view>
+    <view class="list-row" hover-class="list-row-press" bindtap="onVisitLog">
+      <view class="list-ico ico-sky"><image src="/assets/icons/outing.svg" /></view>
+      <view class="list-title">猫猫出门记录</view>
+      <view class="list-arrow"></view>
+    </view>
+    <view class="list-row" hover-class="list-row-press" bindtap="onReleased">
+      <view class="list-ico ico-blush"><image src="/assets/icons/release.svg" /></view>
+      <view class="list-title">我放生的猫</view>
+      <view class="list-arrow"></view>
     </view>
   </view>
 
-  <view class="stats">
-    <view class="stat">
-      <view class="stat-num">{{stats.cardCount}}</view>
-      <view class="stat-label">已记录</view>
+  <view class="list mt-3 anim-rise delay-3">
+    <view class="list-row" hover-class="list-row-press" bindtap="onPrivacy">
+      <view class="list-ico ico-sky"><image src="/assets/icons/privacy.svg" /></view>
+      <view class="list-title">隐私政策</view>
+      <view class="list-arrow"></view>
     </view>
-    <view class="stat-line"></view>
-    <view class="stat">
-      <view class="stat-num">{{stats.breedCount}}</view>
-      <view class="stat-label">遇见品种</view>
+    <view class="list-row" hover-class="list-row-press" bindtap="onAbout">
+      <view class="list-ico ico-mint"><image src="/assets/icons/about.svg" /></view>
+      <view class="list-title">关于</view>
+      <view class="list-arrow"></view>
     </view>
-    <view class="stat-line"></view>
-    <view class="stat">
-      <view class="stat-num">{{stats.memoryCount}}</view>
-      <view class="stat-label">留下记忆</view>
-    </view>
-  </view>
-
-  <view class="menu">
-    <view class="menu-item" bindtap="onBreedReview">
-      <view class="menu-ico out"></view>
-      <view class="menu-txt">品种审核</view>
-      <view class="menu-arrow">›</view>
-    </view>
-    <view class="menu-item" bindtap="onVisitLog">
-      <view class="menu-ico out"></view>
-      <view class="menu-txt">猫猫出门记录</view>
-      <view class="menu-arrow">›</view>
-    </view>
-    <view class="menu-item" bindtap="onReleased">
-      <view class="menu-ico out"></view>
-      <view class="menu-txt">我放生的猫</view>
-      <view class="menu-arrow">›</view>
-    </view>
-    <view class="menu-item" bindtap="onPrivacy">
-      <view class="menu-ico privacy"></view>
-      <view class="menu-txt">隐私政策</view>
-      <view class="menu-arrow">›</view>
-    </view>
-    <view class="menu-item" bindtap="onAbout">
-      <view class="menu-ico about"></view>
-      <view class="menu-txt">关于</view>
-      <view class="menu-arrow">›</view>
-    </view>
-    <button class="menu-item menu-btn" open-type="feedback">
-      <view class="menu-ico feedback"></view>
-      <view class="menu-txt">意见反馈</view>
-      <view class="menu-arrow">›</view>
+    <button class="list-row row-btn" hover-class="list-row-press" open-type="feedback">
+      <view class="list-ico ico-orange"><image src="/assets/icons/feedback.svg" /></view>
+      <view class="list-title">意见反馈</view>
+      <view class="list-arrow"></view>
     </button>
+  </view>
+
+  <view class="foot anim-rise delay-4">
+    <image class="foot-cat" src="/assets/art/cat-sit.svg" mode="aspectFit" />
+    <view class="hand foot-txt">下一页，留给明天遇见的猫</view>
   </view>
 
   <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />

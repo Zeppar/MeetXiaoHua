@@ -1,24 +1,40 @@
-<view class="page camera">
+<view class="page page-sub camera">
   <!-- 离屏抠图兜底画布（不展示） -->
   <canvas type="2d" id="mattingCanvas" class="matting-canvas"></canvas>
 
+  <!-- ========== 准备拍照 ========== -->
   <block wx:if="{{state === 'ready'}}">
     <view class="stage ready-stage">
-      <view class="hero-card">
-        <image class="hero-img" src="/assets/illus/card-meet.jpg" mode="aspectFill" />
-        <view class="hero-mask"></view>
-        <view class="hero-copy">
-          <view class="hero-title">遇见一只猫</view>
-          <view class="hero-sub">{{shootHint}}</view>
+      <view class="ready-head anim-rise">
+        <view class="h2">遇见<text class="marker">一只猫</text></view>
+        <view class="caption mt-1">把街角遇到的它，做成一张白边贴纸</view>
+      </view>
+
+      <view class="paper ready-card anim-rise delay-1">
+        <view class="tape tape-left"></view>
+        <view class="tape tape-sky tape-right"></view>
+        <view class="ready-frame">
+          <view class="corner corner-tl"></view>
+          <view class="corner corner-tr"></view>
+          <view class="corner corner-bl"></view>
+          <view class="corner corner-br"></view>
+          <image class="ready-illus" src="/assets/art/cat-sit.svg" mode="aspectFit" />
+        </view>
+        <view class="ready-tip">
+          <image class="ready-tip-ico" src="/assets/icons/paw.svg" />
+          <text>{{shootHint || '拍清楚猫咪的脸和身体'}}</text>
         </view>
       </view>
-      <view class="matting-picker">
-        <view class="matting-picker-label">抠图类型</view>
+
+      <!-- 抠图厂商切换是调试用的，只在开发版显示 -->
+      <view wx:if="{{showTiming}}" class="matting-picker anim-rise delay-2">
+        <view class="tiny matting-picker-label">抠图类型 · 仅开发版</view>
         <view class="matting-chips">
           <view
             wx:for="{{mattingOptions}}"
             wx:key="id"
-            class="matting-chip {{mattingMode === item.id ? 'active' : ''}}"
+            class="chip matting-chip {{mattingMode === item.id ? 'chip-on' : ''}}"
+            hover-class="tap-press"
             data-id="{{item.id}}"
             bindtap="onSelectMattingMode"
           >
@@ -27,23 +43,42 @@
           </view>
         </view>
       </view>
-      <button class="btn-primary shoot-btn" bindtap="onShoot">点击拍照</button>
-      <button class="btn-secondary upload-btn" bindtap="onUpload">上传图片</button>
-      <view class="upload-tip">电脑调试没有相机时，可从本地选图（暂只抠图加白边）</view>
+
+      <view class="ready-actions anim-rise delay-3">
+        <button class="btn-primary btn-block" bindtap="onShoot">点击拍照</button>
+        <button class="btn-secondary btn-block mt-3" bindtap="onUpload">上传图片</button>
+        <view class="tiny upload-tip">电脑调试没有相机时，可从本地选图（暂只抠图加白边）</view>
+      </view>
     </view>
   </block>
 
+  <!-- ========== 描白边中 ========== -->
   <block wx:elif="{{state === 'recognizing'}}">
     <view class="stage">
-      <view class="preview-card">
-        <image class="preview blur" src="{{tempPath}}" mode="aspectFit" />
-        <view class="overlay">
-          <view class="spinner"></view>
-          <view class="overlay-text">{{recognizingText}}</view>
-          <view class="timing-live">{{timingElapsedText}}</view>
+      <view class="paper wait-card">
+        <view class="tape"></view>
+        <view class="wait-photo">
+          <image class="preview blur" src="{{tempPath}}" mode="aspectFit" />
+          <view class="overlay">
+            <!-- 等待也是仪式：白边沿着框慢慢描出来，爪印一步步走 -->
+            <view class="trace-frame">
+              <view class="trace-line trace-top"></view>
+              <view class="trace-line trace-right"></view>
+              <view class="trace-line trace-bottom"></view>
+              <view class="trace-line trace-left"></view>
+            </view>
+            <view class="paw-walk">
+              <image class="paw-step s1" src="/assets/icons/paw.svg" />
+              <image class="paw-step s2" src="/assets/icons/paw.svg" />
+              <image class="paw-step s3" src="/assets/icons/paw.svg" />
+            </view>
+            <view class="overlay-text">正在给它描白边…</view>
+            <view wx:if="{{showTiming}}" class="timing-live">{{timingElapsedText}}</view>
+          </view>
         </view>
       </view>
-      <view class="timing-panel">
+      <view class="muted wait-sub">别走开，贴纸马上就好</view>
+      <view wx:if="{{showTiming}}" class="timing-panel">
         <view class="timing-title">计时中</view>
         <view class="timing-live-row">{{timingElapsedText || '已用时 0.0s'}}</view>
         <view class="timing-tip">完成后显示各步骤耗时</view>
@@ -51,26 +86,36 @@
     </view>
   </block>
 
+  <!-- ========== 出图预览 ========== -->
   <block wx:elif="{{state === 'preview'}}">
     <view class="stage preview-stage">
-      <view class="cutout-wrap">
-        <image class="cutout {{result.refining ? 'refining' : ''}}" src="{{result.cutoutPath}}" mode="aspectFit" />
+      <view class="paper cutout-wrap">
+        <!-- popSeq 每次换图 +1，奇偶切换两套同样的动画名，让「弹出」能重播 -->
+        <image class="cutout {{result.refining ? 'refining' : ('sticker-pop-' + (result.popSeq % 2))}}" src="{{result.cutoutPath}}" mode="aspectFit" />
+        <!-- 邮戳：记下这次相遇的日期 -->
+        <view wx:if="{{!result.refining}}" class="stamp postmark">
+          <text class="stamp-k">遇见</text>
+          <text class="stamp-v num">{{stampDate}}</text>
+        </view>
         <view wx:if="{{result.refining}}" class="refine-badge">
           <view class="refine-dot" />
           <text>精细抠图中，可先填写信息</text>
         </view>
       </view>
-      <view class="breed-line" bindtap="onEditBreed">
-        <text class="breed">{{result.breed || '待识别'}}</text>
-        <text class="breed-change">{{result.breedManual || result.breed === '待识别' || result.breed === '识别中…' ? '选择品种' : '换品种'}}</text>
+
+      <view class="breed-line" hover-class="tap-press" bindtap="onEditBreed">
+        <text class="breed {{(!result.breed || result.breed === '待识别' || result.breed === '识别中…') ? 'breed-unknown' : ''}}">{{result.breed || '待识别'}}</text>
+        <text class="tag breed-change">{{result.breedManual || result.breed === '待识别' || result.breed === '识别中…' ? '选择品种' : '换品种'}}</text>
       </view>
       <view class="muted conf">{{result.hint || '不对的话可以点上面换品种'}}</view>
-      <view wx:if="{{result.mattingFailed}}" class="muted matt">{{mattingFailed}}</view>
-      <view class="timing-panel">
+      <view wx:if="{{result.mattingFailed}}" class="tiny matt">{{mattingFailed}}</view>
+
+      <view wx:if="{{showTiming}}" class="timing-panel">
         <view class="timing-title">耗时明细</view>
         <view wx:for="{{timingSteps}}" wx:key="text" class="timing-step">{{item.text}}</view>
         <view wx:if="{{timingTotalText}}" class="timing-total">{{timingTotalText}}</view>
       </view>
+
       <view class="preview-actions">
         <button class="btn-secondary" bindtap="onRetake">{{retakeText}}</button>
         <button class="btn-primary" bindtap="onSaveStart">{{saveText}}</button>
@@ -78,39 +123,46 @@
     </view>
   </block>
 
+  <!-- ========== 失败 ========== -->
   <block wx:elif="{{state === 'fail'}}">
     <view class="stage fail-stage">
-      <view class="fail-card">
+      <view class="paper paper-pad fail-card anim-pop">
+        <view class="tape tape-blush"></view>
+        <image class="fail-illus" src="/assets/art/cat-sit.svg" mode="aspectFit" />
+        <view class="fail-title">这次没贴成</view>
         <view class="fail-text">{{failMessage}}</view>
-        <view wx:if="{{timingSteps.length || timingTotalText}}" class="timing-panel timing-panel-fail">
+        <view wx:if="{{showTiming && (timingSteps.length || timingTotalText)}}" class="timing-panel timing-panel-fail">
           <view class="timing-title">耗时明细</view>
           <view wx:for="{{timingSteps}}" wx:key="text" class="timing-step">{{item.text}}</view>
           <view wx:if="{{timingTotalText}}" class="timing-total">{{timingTotalText}}</view>
         </view>
-        <button class="btn-primary" bindtap="{{failCode === 'NETWORK' ? 'onRetryRecognize' : 'onRetake'}}">
+        <button class="btn-primary btn-block" bindtap="{{failCode === 'NETWORK' ? 'onRetryRecognize' : 'onRetake'}}">
           {{failCode === 'NETWORK' ? retryText : retakeAgainText}}
         </button>
-        <button wx:if="{{failCode === 'NETWORK' || failCode === 'NO_CAT' || failCode === 'HEAD_ONLY' || failCode === 'TOO_FAR' || failCode === 'TIMEOUT' || failCode === 'MATTING_FAILED' || failCode === 'REMBG_UNREACHABLE'}}" class="btn-ghost" bindtap="onBackHome">{{backHomeText}}</button>
+        <button wx:if="{{failCode === 'NETWORK' || failCode === 'NO_CAT' || failCode === 'HEAD_ONLY' || failCode === 'TOO_FAR' || failCode === 'TIMEOUT' || failCode === 'MATTING_FAILED' || failCode === 'REMBG_UNREACHABLE'}}" class="btn-ghost btn-block mt-2" bindtap="onBackHome">{{backHomeText}}</button>
       </view>
     </view>
   </block>
 
-  <view wx:if="{{showCameraAuth}}" class="auth-mask" catchtouchmove="noop">
-    <view class="auth-panel">
-      <view class="auth-title">{{cameraTitle}}</view>
-      <view class="auth-body">{{cameraBody}}</view>
-      <view class="auth-actions">
+  <!-- ========== 授权弹窗 ========== -->
+  <view wx:if="{{showCameraAuth}}" class="mask auth-mask" catchtouchmove="noop">
+    <view class="dialog">
+      <image class="auth-illus" src="/assets/art/cat-sit.svg" mode="aspectFit" />
+      <view class="dialog-title">{{cameraTitle}}</view>
+      <view class="dialog-body">{{cameraBody}}</view>
+      <view class="dialog-actions">
         <button class="btn-ghost" bindtap="onAuthCancel">{{notNowText}}</button>
         <button class="btn-primary" bindtap="onOpenSetting">{{goSettingsText}}</button>
       </view>
     </view>
   </view>
 
-  <view wx:if="{{showLocationAuth}}" class="auth-mask" catchtouchmove="noop">
-    <view class="auth-panel">
-      <view class="auth-title">{{locationTitle}}</view>
-      <view class="auth-body">{{locationBody}}</view>
-      <view class="auth-actions">
+  <view wx:if="{{showLocationAuth}}" class="mask auth-mask" catchtouchmove="noop">
+    <view class="dialog">
+      <image class="auth-illus" src="/assets/art/empty-map.svg" mode="aspectFit" />
+      <view class="dialog-title">{{locationTitle}}</view>
+      <view class="dialog-body">{{locationBody}}</view>
+      <view class="dialog-actions">
         <button class="btn-ghost" bindtap="onAuthCancel">{{notNowText}}</button>
         <button class="btn-primary" bindtap="onOpenSetting">{{goSettingsText}}</button>
       </view>
@@ -146,20 +198,26 @@
     bind:extra="onUseLocation"
   />
 
-  <view wx:if="{{showBreedPicker}}" class="breed-mask" catchtouchmove="noop" bindtap="onBreedCancel">
-    <view class="breed-sheet" catchtap="noop">
-      <view class="breed-sheet-hd">
-        <text class="breed-sheet-title">选择品种</text>
-        <text class="breed-sheet-close" bindtap="onBreedCancel">取消</text>
+  <!-- ========== 品种选择 ========== -->
+  <view wx:if="{{showBreedPicker}}" class="mask mask-bottom breed-mask" catchtouchmove="noop" bindtap="onBreedCancel">
+    <view class="sheet-panel breed-sheet" catchtap="noop">
+      <view class="sheet-grip"></view>
+      <view class="row-between breed-sheet-hd">
+        <text class="h3">选择品种</text>
+        <text class="breed-sheet-close" hover-class="tap-press" bindtap="onBreedCancel">取消</text>
       </view>
       <scroll-view scroll-y class="breed-sheet-list">
         <view
           wx:for="{{breedOptions}}"
           wx:key="*this"
           class="breed-option {{result.breed === item ? 'on' : ''}}"
+          hover-class="list-row-press"
           data-breed="{{item}}"
           bindtap="onPickBreed"
-        >{{item}}</view>
+        >
+          <text class="grow">{{item}}</text>
+          <view wx:if="{{result.breed === item}}" class="seal breed-option-seal">当前</view>
+        </view>
       </scroll-view>
     </view>
   </view>

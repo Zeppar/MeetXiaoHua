@@ -1,4 +1,5 @@
 Component({
+  options: { addGlobalClass: true },
   properties: {
     show: { type: Boolean, value: false },
     text: { type: String, value: '猫猫正在赶来…' },

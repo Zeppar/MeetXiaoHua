@@ -1,20 +1,44 @@
-<view class="page history">
-  <view class="head">
-    <view class="head-title">它的出门记录</view>
-    <view class="head-sub">每一次小小冒险</view>
+<view class="page page-sub history">
+  <view class="head anim-rise">
+    <view class="h2">它的出门记录</view>
+    <view class="caption mt-1">每一次小小冒险</view>
   </view>
 
-  <view wx:if="{{ready && logs.length}}" class="list">
-    <view wx:for="{{logs}}" wx:key="_id" class="item">
-      <view class="time">{{item.timeLabel}}</view>
-      <view class="line">去了「{{item.distanceLabel}}」</view>
-      <view class="line">{{item.behaviorText}}</view>
-      <view wx:if="{{item.interactLine}}" class="line muted">{{item.interactLine}}</view>
+  <view wx:if="{{ready && logs.length}}" class="timeline">
+    <view
+      wx:for="{{logs}}"
+      wx:key="_id"
+      class="tl-item anim-rise delay-{{index < 3 ? index + 1 : 4}}"
+    >
+      <view class="tl-dot tl-dot-sky"></view>
+
+      <view class="postcard log-card">
+        <view class="log-head">
+          <view class="seal seal-sky">它出门了</view>
+          <view class="tiny log-time">{{item.timeLabel}}</view>
+        </view>
+
+        <view class="log-main">
+          <view class="log-body">
+            <view class="h3 log-title">去了「{{item.distanceLabel}}」</view>
+          </view>
+          <view class="stamp log-stamp stamp-sky">
+            <view class="stamp-k">{{item.distKm ? '千米' : '远方'}}</view>
+            <view class="stamp-v num">{{item.distKm ? item.distKm : '小屋'}}</view>
+          </view>
+        </view>
+
+        <view wx:if="{{item.behaviorText}}" class="hand log-behavior">{{item.behaviorText}}</view>
+        <view wx:if="{{item.interactLine}}" class="log-interact">
+          <image class="log-paw" src="/assets/icons/paw.svg" />
+          <text>{{item.interactLine}}</text>
+        </view>
+      </view>
     </view>
   </view>
 
-  <view wx:elif="{{ready}}" class="empty-card">
-    <empty-state main="{{empty}}" />
+  <view wx:elif="{{ready}}" class="empty-wrap">
+    <empty-state main="{{empty}}" illus="/assets/art/empty-mail.svg" />
   </view>
 
   <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />

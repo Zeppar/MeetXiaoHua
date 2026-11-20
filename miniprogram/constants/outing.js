@@ -22,8 +22,10 @@ const COPY = {
   outTap: '它还在外面呢，再等等吧。',
   visitorHere: '有小猫来串门啦',
   visitorTap: '点点它，打个招呼',
-  reportTitle: '🐾 它回来了',
-  reportDistance: (breed, distLabel) => `你的${breed}去了一趟「${distLabel}」`,
+  reportTitle: '它回来了',
+  // 品种还没认出来时别把「待识别」当名字
+  reportDistance: (breed, distLabel) =>
+    `你的${(['待识别', '识别中…', '未知小动物'].indexOf(breed) >= 0 ? '' : breed) || '小猫'}去了一趟「${distLabel}」`,
   reportPet: '有人摸了摸它。',
   reportFed: '有人给了它一颗猫粮。',
   reportIdle: '它在那里待了一会儿。',
@@ -32,7 +34,7 @@ const COPY = {
   toastPet: '你摸了摸它',
   toastFed: '你给了它一颗猫粮',
   leftPaw: '有一只猫来过，但已经走了。',
-  leftTitle: '🐾 有猫来过',
+  leftTitle: '有猫来过',
   leftBody: (distLabel, breed) => `一只来自 ${distLabel}的${breed}来过你的小屋。`,
   btnPet: '摸摸它',
   btnFed: '给它一颗猫粮',

@@ -17,10 +17,10 @@
     "pages/breed-review/breed-review"
   ],
   "window": {
-    "navigationBarBackgroundColor": "#F5F7FA",
+    "navigationBarBackgroundColor": "#FBF7F0",
     "navigationBarTitleText": "遇见小花猫",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#F5F7FA",
+    "backgroundColor": "#FBF7F0",
     "backgroundTextStyle": "dark"
   },
   "tabBar": {

@@ -1,4 +1,5 @@
 Component({
+  options: { addGlobalClass: true },
   properties: {
     cardId: { type: String, value: '' },
     image: { type: String, value: '' },
