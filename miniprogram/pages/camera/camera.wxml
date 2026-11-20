@@ -54,7 +54,11 @@
   <block wx:elif="{{state === 'preview'}}">
     <view class="stage preview-stage">
       <view class="cutout-wrap">
-        <image class="cutout" src="{{result.cutoutPath}}" mode="aspectFit" />
+        <image class="cutout {{result.refining ? 'refining' : ''}}" src="{{result.cutoutPath}}" mode="aspectFit" />
+        <view wx:if="{{result.refining}}" class="refine-badge">
+          <view class="refine-dot" />
+          <text>精细抠图中，可先填写信息</text>
+        </view>
       </view>
       <view class="breed-line" bindtap="onEditBreed">
         <text class="breed">{{result.breed || '待识别'}}</text>

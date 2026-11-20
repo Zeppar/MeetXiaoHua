@@ -252,7 +252,9 @@ def process(raw, model, border, alpha_matting, allow_fallback=True):
         img.save(f"{stem}_in.jpg", quality=92)
         cut.save(f"{stem}_raw.png")
         out_img.save(f"{stem}_out.png")
-    return buf.getvalue(), bordered, infer_ms, timing
+    # 没走兜底、但快模型没把握：告诉调用方「结果可能残缺」，由它决定要不要再请求精修
+    uncertain = model != FALLBACK_MODEL and ratio > FALLBACK_RATIO
+    return buf.getvalue(), bordered, infer_ms, timing, uncertain
 
 
 def read_upload(handler):
@@ -326,7 +328,7 @@ class Handler(BaseHTTPRequestHandler):
         started = time.time()
         try:
             raw = read_upload(self)
-            png, bordered, infer_ms, timing = process(raw, model, border, alpha, allow_fallback)
+            png, bordered, infer_ms, timing, uncertain = process(raw, model, border, alpha, allow_fallback)
         except Exception as e:  # noqa: BLE001
             print("[rembg-server] fail", repr(e), flush=True)
             self.send_json(500, {"ok": False, "message": str(e) or "rembg fail"})
@@ -340,6 +342,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "image/png")
             self.send_header("Content-Length", str(len(png)))
             self.send_header("X-Rembg-Bordered", "1" if bordered else "0")
+            self.send_header("X-Rembg-Uncertain", "1" if uncertain else "0")
             self.end_headers()
             self.wfile.write(png)
             return
@@ -350,6 +353,8 @@ class Handler(BaseHTTPRequestHandler):
                 "mime": "image/png",
                 "imageBase64": base64.b64encode(png).decode("ascii"),
                 "bordered": bordered,
+                "uncertain": uncertain,
+                "refineModel": FALLBACK_MODEL if uncertain else "",
                 "upstreamMs": total,
                 "timing": timing,
             },

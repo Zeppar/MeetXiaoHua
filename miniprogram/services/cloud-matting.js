@@ -353,13 +353,21 @@ function pingLocalRembg() {
   })
 }
 
-function uploadToLocalRembg(filePath) {
+/**
+ * @param {{ model?: string, noFallback?: boolean }} [opts]
+ *   noFallback：让服务端只跑快模型，没把握时返回 uncertain 而不是原地等精细模型
+ */
+function uploadToLocalRembg(filePath, opts = {}) {
   const base = String(localRembg.BASE_URL || 'http://127.0.0.1:7001').replace(/\/$/, '')
   const modelName =
-    (mattingMode && mattingMode.QUALITY_MODEL) || (localRembg && localRembg.MODEL) || 'u2net'
+    opts.model ||
+    (mattingMode && mattingMode.QUALITY_MODEL) ||
+    (localRembg && localRembg.MODEL) ||
+    'u2net'
   const model = encodeURIComponent(modelName)
   let url = `${base}/api/remove?model=${model}`
-  if (localRembg && localRembg.ALPHA) url += '&a=true&af=200&ab=15&ae=4'
+  if (opts.noFallback) url += '&fallback=0'
+  if (!opts.model && localRembg && localRembg.ALPHA) url += '&a=true&af=200&ab=15&ae=4'
   // 新服务 scripts/rembg-server.py 支持服务端加白边；旧 Node 代理会忽略这个参数
   if (!(localRembg && localRembg.WHITE_BORDER === false)) url += '&border=1'
   const started = Date.now()
@@ -450,6 +458,8 @@ function uploadToLocalRembg(filePath) {
           resolve({
             path: outFile,
             bordered: !!parsed.bordered,
+            uncertain: !!parsed.uncertain,
+            refineModel: parsed.refineModel || '',
             uploadMs: transferMs,
             rembgMs,
             downloadMs,
@@ -681,7 +691,8 @@ async function tryLocalRembg(filePath, options = {}) {
   )
   const t2 = Date.now()
   const rembgRes = await withTimeout(
-    uploadToLocalRembg(prepared.jpgPath),
+    // 只跑快模型：没把握时服务端返回 uncertain，由页面先展示、后台再精修（不让用户干等）
+    uploadToLocalRembg(prepared.jpgPath, { noFallback: true }),
     LOCAL_REMBG_TIMEOUT_MS,
     'TIMEOUT',
     '本机 rembg 超时'
@@ -735,11 +746,45 @@ async function tryLocalRembg(filePath, options = {}) {
     provider: 'rembg-local',
     timing,
     cropped: prepared.cropped,
+    // 快模型没把握（常见：只抠出猫头）→ 交给页面后台精修，不让用户干等
+    needsRefine: !!(rembgRes && rembgRes.uncertain && rembgRes.refineModel),
+    refine:
+      rembgRes && rembgRes.uncertain && rembgRes.refineModel
+        ? () => refineLocalRembg(prepared.jpgPath, rembgRes.refineModel)
+        : null,
     hint:
       (result && result.hint) ||
       (options.forceRembgFull
         ? `识别后整图 rembg，总 ${Date.now() - totalStart}ms`
         : `本机 rembg 整图，总 ${Date.now() - totalStart}ms`)
+  }
+}
+
+/**
+ * 后台精修：用精细模型（BiRefNet）重抠同一张已压缩的图，CPU 上约 10s。
+ * 结果已由服务端加好白边；服务端没加时这里补白边。
+ */
+async function refineLocalRembg(jpgPath, refineModel) {
+  const started = Date.now()
+  try {
+    const res = await withTimeout(
+      uploadToLocalRembg(jpgPath, { model: refineModel }),
+      LOCAL_REMBG_TIMEOUT_MS,
+      'TIMEOUT',
+      '精细抠图超时'
+    )
+    if (!res || !res.path) return { ok: false, message: '精细抠图未返回结果' }
+    let cutoutPath = res.path
+    if (!res.bordered) {
+      const done = await finishWithWhiteBorder(res.path, 'rembg-local', null, [])
+      cutoutPath = (done && done.cutoutPath) || res.path
+    }
+    const ms = Date.now() - started
+    console.log('[cloud-matting] refine done', refineModel, ms, 'ms')
+    return { ok: true, cutoutPath, ms, model: refineModel }
+  } catch (e) {
+    console.warn('[cloud-matting] refine fail', e)
+    return { ok: false, message: (e && e.message) || '精细抠图失败' }
   }
 }
 

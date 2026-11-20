@@ -343,6 +343,8 @@ Page({
         return
       }
 
+      // 快模型没把握：先给用户看原图（压暗+角标），后台精修完再换成贴纸
+      const refining = !!(result.needsRefine && typeof result.refine === 'function')
       this.finishRecognize(token, {
         state: 'preview',
         timingSteps: timingView.steps,
@@ -357,13 +359,15 @@ Page({
               ? `识别置信度 ${result.confidence || 0}%`
               : '暂未识别品种，仅抠图预览'),
           mattingFailed: !!result.mattingFailed,
-          cutoutPath: result.cutoutPath || tempPath,
+          cutoutPath: refining ? tempPath : result.cutoutPath || tempPath,
           originalPath: result.originalPath || tempPath,
           provider: result.provider || '',
+          refining,
           timing: timingView.lines,
           timingTotalText: timingView.totalText || `总耗时 ${formatMs(elapsed)}`
         }
       })
+      if (refining) this.startRefine(token, result.refine, result.cutoutPath)
     }
 
     setTimeout(() => {
@@ -409,6 +413,8 @@ Page({
               mattingFailed: !sticker || !sticker.ok || cutoutPath === tempPath,
               cutoutPath,
               originalPath: tempPath,
+              needsRefine: !!(sticker && sticker.needsRefine),
+              refine: sticker && sticker.refine,
               provider: (sticker && sticker.provider) || 'rembg-local',
               hint: '贴纸已出，百度品种识别中…',
               timing: timing.concat([`总耗时(抠图): ${rembgMs}ms`])
@@ -534,6 +540,8 @@ Page({
             mattingFailed: sticker.cutoutPath === tempPath,
             cutoutPath: sticker.cutoutPath,
             originalPath: tempPath,
+            needsRefine: !!sticker.needsRefine,
+            refine: sticker.refine,
             provider: sticker.provider || 'matting',
             hint:
               sticker.hint ||
@@ -573,7 +581,59 @@ Page({
     }, 50)
   },
 
+  /**
+   * 后台精修：不阻塞界面。完成后把预览换成精修贴纸；失败则退回快模型结果。
+   * this._refinePromise 供保存时等待。
+   */
+  startRefine(token, refine, quickCutoutPath) {
+    const started = Date.now()
+    this._quickCutout = quickCutoutPath || ''
+    this._refinePromise = Promise.resolve()
+      .then(() => refine())
+      .catch((e) => ({ ok: false, message: (e && e.message) || '精细抠图失败' }))
+      .then((r) => {
+        if (token !== this.recognizeToken || !this.data.result) return
+        const steps = (this.data.timingSteps || []).slice()
+        if (r && r.ok && r.cutoutPath) {
+          steps.push({ text: `后台精修(${r.model || 'refine'}): ${Date.now() - started}ms` })
+          this.setData({
+            timingSteps: steps,
+            'result.cutoutPath': r.cutoutPath,
+            'result.mattingFailed': false,
+            'result.refining': false
+          })
+        } else {
+          steps.push({ text: `后台精修失败: ${(r && r.message) || ''}` })
+          this.setData({
+            timingSteps: steps,
+            'result.cutoutPath': quickCutoutPath || this.data.tempPath,
+            'result.refining': false,
+            'result.hint': '精细抠图失败，已用快速结果'
+          })
+        }
+      })
+      .finally(() => {
+        if (token === this.recognizeToken) this._refinePromise = null
+      })
+  },
+
+  /** 保存前：精修还没完就等它（最多 30s，超时用当前预览） */
+  async waitRefineIfNeeded() {
+    if (!this._refinePromise || !(this.data.result && this.data.result.refining)) return
+    wx.showLoading({ title: '精细抠图中…', mask: true })
+    await Promise.race([this._refinePromise, new Promise((r) => setTimeout(r, 30000))])
+    wx.hideLoading()
+    if (this.data.result && this.data.result.refining) {
+      // 超时仍未完成：用快模型结果保存，别把原图当贴纸存下
+      this.setData({
+        'result.refining': false,
+        'result.cutoutPath': this._quickCutout || this.data.result.cutoutPath
+      })
+    }
+  },
+
   onRetake() {
+    this._refinePromise = null
     this.recognizeToken += 1
     this.clearRecognizeTimer()
     this.clearElapsedTimer()
@@ -717,6 +777,7 @@ Page({
       }
     }
 
+    await this.waitRefineIfNeeded()
     this.setData({ saving: true })
     wx.showLoading({ title: '保存中', mask: true })
 
