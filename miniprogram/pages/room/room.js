@@ -7,6 +7,7 @@ const { mergeLayout, serializeLayout } = require('../../constants/furniture')
 const { ACTION_LIST, toBars, DEFAULT_CARE, intimacyView } = require('../../services/care-engine')
 const { cardDisplayName } = require('../../utils/format')
 const { pickCardImage } = require('../../utils/card-media')
+const { formatOutingPostcard } = require('../../utils/outing-postcard')
 const { blurCoordinate, getCurrentPosition } = require('../../utils/geo-blur')
 const nav = require('../../utils/navigate')
 const pageLoad = require('../../utils/page-load')
@@ -20,7 +21,7 @@ const DEBUG_MOCK_CAT = {
   memoryCount: 2
 }
 
-const { normalizeMateIds, roomOccupancy, ROOM_CAPACITY } = require('../../utils/room-mates')
+const { normalizeMateIds, resolveHomeCards, roomOccupancy, ROOM_CAPACITY } = require('../../utils/room-mates')
 
 const MATE_SLOTS = [
   { x: 18, y: 58, facingLeft: false, scale: 0.9 },
@@ -421,25 +422,10 @@ Page({
 
   /** 外出猫不进场景；其余猫照常展示 */
   buildHomeScene(cards, user, outingCardId, preferredDisplay) {
-    const byId = {}
-    ;(cards || []).forEach((c) => {
-      if (c && c._id) byId[c._id] = c
-    })
-    if (preferredDisplay && preferredDisplay._id) byId[preferredDisplay._id] = preferredDisplay
-
-    const occ = roomOccupancy(user || {})
-    const homeIds = occ.ids.filter((id) => id && id !== outingCardId)
-    let focusId = ''
-    if (preferredDisplay && homeIds.indexOf(preferredDisplay._id) >= 0) {
-      focusId = preferredDisplay._id
-    } else {
-      focusId = homeIds[0] || ''
-    }
-    const displayCard = focusId ? byId[focusId] || null : null
-    const mateIds = homeIds.filter((id) => id !== focusId)
+    const { displayCard, mateIds } = resolveHomeCards(user, cards, outingCardId, preferredDisplay)
     const matePatch = this.buildRoomMates(cards || [], displayCard, mateIds)
     if (displayCard && outingCardId) {
-      const homeCount = homeIds.length
+      const homeCount = 1 + matePatch.roomMates.length
       matePatch.roomMateHint =
         homeCount > 1
           ? `小屋 ${homeCount}/${ROOM_CAPACITY} · 有小猫外出中`
@@ -575,10 +561,11 @@ Page({
       preferredDisplay = id ? (cards || []).find((c) => c._id === id) || null : null
     }
     // 有猫却没展示位：自动用第一只，避免小屋被刷空
-    if (!preferredDisplay && (cards || []).length) {
+    if (!preferredDisplay && !roomOccupancy(user).count && (cards || []).length) {
       preferredDisplay = cards[0]
       try {
         await api.updateProfile({ displayCardId: preferredDisplay._id })
+        user.displayCardId = preferredDisplay._id
       } catch (e) {
         console.warn('[room] auto set displayCard', e)
       }
@@ -644,10 +631,10 @@ Page({
 
     if (room.autoShowReport && room.unreadReport && !this.data.showReport) {
       patch.showReport = true
-      patch.report = room.unreadReport
+      patch.report = { ...room.unreadReport, postcard: formatOutingPostcard(room.unreadReport) }
       patch.reportAuto = true
     } else if (!this.data.showReport) {
-      patch.report = room.unreadReport
+      patch.report = room.unreadReport && { ...room.unreadReport, postcard: formatOutingPostcard(room.unreadReport) }
     }
 
     this.setData(patch, () => this._syncCatAi())
@@ -784,7 +771,7 @@ Page({
       }
       this.setData({
         showReport: true,
-        report: room.unreadReport,
+        report: { ...room.unreadReport, postcard: formatOutingPostcard(room.unreadReport) },
         reportAuto: false
       })
     })
@@ -820,8 +807,9 @@ Page({
     if (!visitor || this._visitorBusy) return
     this._visitorBusy = true
     try {
-      const res = await api.interactVisitor({ visitId: visitor.id, action })
-      const next = { ...visitor }
+      const res = await api.interactVisitor({ visitId: visitor.id, action, source: visitor.source })
+      if (!this.data.visitor || this.data.visitor.id !== visitor.id) return
+      const next = { ...this.data.visitor }
       if (action === 'pet') next.petByHost = true
       if (action === 'feed') next.fedByHost = true
       this.setData({ visitor: next })
@@ -835,13 +823,14 @@ Page({
 
   onAdoptVisitor() {
     const visitor = this.data.visitor
-    if (!visitor || !visitor.canAdopt) return
+    if (!visitor || !visitor.canAdopt || this._visitorBusy) return
     wx.showModal({
       title: '收养这只猫？',
       content: '收养后它会进入你的图鉴，原主人那边会显示「已被收养」。需要定位以便留下足迹。',
       confirmText: '收养',
       success: async (res) => {
-        if (!res.confirm) return
+        if (!res.confirm || this._visitorBusy) return
+        this._visitorBusy = true
         wx.showLoading({ title: '收留中…', mask: true })
         try {
           const loc = await getCurrentPosition()
@@ -860,6 +849,7 @@ Page({
           const geo = blurCoordinate(loc.latitude, loc.longitude)
           const out = await api.adoptVisitor({
             visitId: visitor.id,
+            source: visitor.source,
             geo,
             placeText: '我家门口'
           })
@@ -870,6 +860,8 @@ Page({
         } catch (err) {
           wx.hideLoading()
           wx.showToast({ title: (err && err.message) || '收养失败', icon: 'none' })
+        } finally {
+          this._visitorBusy = false
         }
       }
     })

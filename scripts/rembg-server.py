@@ -61,6 +61,7 @@ def resolve_model(name):
 
 DEFAULT_MODEL = resolve_model(os.environ.get("REMBG_MODEL", "u2net")) or "u2net"
 TOKEN = os.environ.get("REMBG_TOKEN", "")
+REID_MODEL = os.environ.get("CAT_REID_MODEL", "")
 MAX_SIDE = 640  # 与小程序上传尺寸一致；模型内部本来就缩到 320
 MAX_BODY = 12 * 1024 * 1024
 DEBUG_DIR = None  # --debug 时为 Path
@@ -74,6 +75,7 @@ MIN_STROKE = 3
 MAX_STROKE = 11
 
 _sessions = {}
+_reid_session = None
 _session_lock = threading.Lock()
 # ONNX 本身多线程吃满 CPU，并发推理只会互相拖慢 → 串行
 _infer_lock = threading.Lock()
@@ -88,6 +90,39 @@ def get_session(model):
             _sessions[model] = sess
             print(f"[rembg-server] loaded {model} in {int((time.time() - t) * 1000)}ms", flush=True)
         return sess
+
+
+def get_reid_session():
+    global _reid_session
+    with _session_lock:
+        if _reid_session is None:
+            from onnxruntime import InferenceSession
+
+            _reid_session = InferenceSession(REID_MODEL, providers=["CPUExecutionProvider"])
+        return _reid_session
+
+
+def embed_photo(raw):
+    img = load_image(raw).resize((224, 224), Image.BICUBIC)
+    pixels = np.asarray(img, dtype=np.float32) / 255
+    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    tensor = ((pixels - mean) / std).transpose(2, 0, 1)[None]
+    session = get_reid_session()
+    with _infer_lock:
+        outputs = session.run(None, {session.get_inputs()[0].name: tensor})
+    for output in outputs:
+        if output.shape == (1, 384):
+            vector = output[0]
+        elif output.ndim == 3 and output.shape[0] == 1 and output.shape[2] == 384:
+            vector = output[0, 0]
+        else:
+            continue
+        peak = np.max(np.abs(vector))
+        if np.isfinite(peak) and peak > 0:
+            quantized = np.rint(vector / peak * 127).astype(np.int8)
+            return base64.b64encode(quantized.tobytes()).decode("ascii")
+    raise ValueError("expected 384-dimensional DINOv2 features")
 
 
 def load_image(raw):
@@ -308,14 +343,36 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json(404, {"ok": False, "message": "not found"})
 
+    def do_embed(self):
+        if not REID_MODEL:
+            self.send_json(503, {"ok": False, "message": "cat embedding disabled"})
+            return
+        try:
+            if not 0 < int(self.headers.get("Content-Length") or 0) <= 262500:
+                raise ValueError("bad body size")
+            raw = read_upload(self)
+        except ValueError:
+            self.send_json(400, {"ok": False, "message": "invalid image request"})
+            return
+        try:
+            embedding = embed_photo(raw)
+        except Exception as e:  # noqa: BLE001
+            print("[rembg-server] embed fail", repr(e), flush=True)
+            self.send_json(500, {"ok": False, "message": "cat embedding failed"})
+            return
+        self.send_json(200, {"ok": True, "embedding": embedding})
+
     def do_POST(self):
         u = urlparse(self.path)
-        if u.path != "/api/remove":
-            self.send_json(404, {"ok": False, "message": "POST /api/remove only"})
+        if u.path not in ("/api/remove", "/api/embed"):
+            self.send_json(404, {"ok": False, "message": "not found"})
             return
         qs = parse_qs(u.query)
         if not self.authorized(qs):
             self.send_json(401, {"ok": False, "message": "bad token"})
+            return
+        if u.path == "/api/embed":
+            self.do_embed()
             return
         asked = (qs.get("model") or [DEFAULT_MODEL])[0]
         model = resolve_model(asked)

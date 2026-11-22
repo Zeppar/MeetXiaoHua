@@ -28,11 +28,7 @@
           </view>
         </view>
 
-        <view wx:if="{{item.behaviorText}}" class="hand log-behavior">{{item.behaviorText}}</view>
-        <view wx:if="{{item.interactLine}}" class="log-interact">
-          <image class="log-paw" src="/assets/icons/paw.svg" />
-          <text>{{item.interactLine}}</text>
-        </view>
+        <outing-postcard postcard="{{item.postcard}}" />
       </view>
     </view>
   </view>

@@ -69,7 +69,7 @@
         <view class="caption mt-1">{{myCat.visiting ? '正在拜访别人的小屋' : '出门散步了，晚点会回来'}}</view>
       </view>
     </block>
-    <block wx:else>
+    <block wx:elif="{{myCat.status === 'none'}}">
       <view class="now-pic">
         <image class="now-img" src="/assets/art/cat-shadow.svg" mode="aspectFit" />
       </view>
@@ -78,6 +78,9 @@
         <view class="caption mt-1">去图鉴挑一只猫，让它住进来</view>
       </view>
     </block>
+    <view wx:else class="grow">
+      <view class="h3">{{myCat.status === 'loading' ? '正在查看小屋…' : '暂时无法读取小屋'}}</view>
+    </view>
     <view class="list-arrow"></view>
   </view>
 

@@ -6,13 +6,13 @@
     <view class="doc-date"><text class="seal seal-muted">更新日期：2026年11月5日</text></view>
 
     <view class="doc-h"><text class="marker">一、我们收集的信息</text></view>
-    <view class="doc-p">1. 相机 / 图片：用于生成你的个人卡牌记录。你可拍照，或在调试时上传本地图片；图片仅用于你的个人记录。</view>
+    <view class="doc-p">1. 相机 / 图片：用于生成你的个人卡牌记录。你可拍照，或在调试时上传本地图片。原照用于你的个人记录。</view>
     <view class="doc-p">2. 地点：仅在你主动填写地点，或点击「使用当前位置」并授权后收集。地点会做模糊处理，且只有你自己能看到，不会用于展示给其他用户，也不会进入分享流程。</view>
     <view class="doc-p">3. 你主动填写的备注与记忆内容，仅用于你的个人回看。</view>
 
     <view class="doc-h"><text class="marker">二、信息的可见范围</text></view>
-    <view class="doc-p">你的卡牌、记忆、地点与小屋内容默认仅自己可见。第一版不提供访客与公开分享。</view>
-    <view class="doc-p">「猫猫出门」串门时，其他用户只会看到你的猫立绘、模糊距离与预设行为描述，不会看到你的昵称、ID 或精确位置。你可以在设置中关闭出门或串门。</view>
+    <view class="doc-p">你的卡牌、记忆、地点与小屋内容默认仅自己可见。</view>
+    <view class="doc-p">串门时，对方可以看到你的小猫立绘、模糊距离与预设行为描述。交到朋友时，对方的回家明信片可留存小猫立绘。你可以在设置中关闭出门或串门。</view>
 
     <view class="doc-h"><text class="marker">三、权限说明</text></view>
     <view class="doc-p">相机权限：拍摄偶遇的猫。被拒绝后仍可浏览已有记录。</view>

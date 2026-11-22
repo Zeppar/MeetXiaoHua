@@ -10,6 +10,7 @@ const {
   formatDistanceLabel,
   COPY
 } = require('../constants/outing')
+const { pickCardImage } = require('../utils/card-media')
 
 function defaultSettings() {
   return {
@@ -52,12 +53,16 @@ function ensureUserOutingFields(user) {
   return user
 }
 
+function isAway(outing) {
+  return !!outing && (outing.status === 'out' || outing.status === 'visiting')
+}
+
 function todayKey(now = Date.now()) {
   const d = new Date(now)
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
 }
 
-function buildReport(outing, breed, showDistance) {
+function buildReport(outing, card, showDistance, log) {
   const distLabel = formatDistanceLabel(outing.distanceKm, showDistance)
   let interactLine = COPY.reportIdle
   if (outing.pet && outing.fed) interactLine = `${COPY.reportPet}${COPY.reportFed}`
@@ -66,10 +71,16 @@ function buildReport(outing, breed, showDistance) {
 
   return {
     title: COPY.reportTitle,
-    distanceLine: COPY.reportDistance(breed || '小猫', distLabel),
+    distanceLine: card.name ? `${card.name}去了一趟「${distLabel}」` : COPY.reportDistance(card.breed || '小猫', distLabel),
     behaviorLine: outing.behaviorText || '',
     interactLine,
-    createdAt: Date.now()
+    behaviorIndex: log.behaviorIndex,
+    catImage: log.catImage,
+    friend: log.friend,
+    pet: log.pet,
+    fed: log.fed,
+    simulated: log.simulated,
+    createdAt: log.returnedAt
   }
 }
 
@@ -82,7 +93,9 @@ function tickOwnerOuting(ctx) {
     user,
     now = Date.now(),
     getDisplayCard,
+    getOutingCard,
     createVisitToHost,
+    getVisit,
     onReturnHome
   } = ctx
   ensureUserOutingFields(user)
@@ -91,9 +104,11 @@ function tickOwnerOuting(ctx) {
   const settings = user.settings
   const outing = user.outing
   const displayCard = getDisplayCard()
+  const active = isAway(outing)
+  const tripCard = active ? getOutingCard(outing.cardId) : displayCard
 
-  // 无展示猫或关闭出门：清空行程（保留未读报告）
-  if (!displayCard || !settings.allowMyCatOut) {
+  // 关闭出门只阻止新行程，已经出门的猫继续完成行程。
+  if (!tripCard || (!active && !settings.allowMyCatOut)) {
     if (outing.status === 'out' || outing.status === 'visiting' || outing.status === 'home') {
       // 若正在外出，中止但不生成报告
       if (outing.status === 'out' || outing.status === 'visiting') {
@@ -111,11 +126,10 @@ function tickOwnerOuting(ctx) {
         changed = true
       }
     }
-    if (!displayCard) return { changed, events }
-    if (!settings.allowMyCatOut) return { changed, events }
+    return { changed, events }
   }
 
-  const cardId = displayCard._id
+  const cardId = tripCard._id
 
   // 展示位切换：重新开始在家计时
   if (outing.cardId && outing.cardId !== cardId && (outing.status === 'home' || outing.status === 'idle')) {
@@ -162,9 +176,10 @@ function tickOwnerOuting(ctx) {
     outing.status = 'visiting'
 
     const visit = createVisitToHost({
-      guestCard: displayCard,
+      guestCard: tripCard,
       ownerOpenId: user._openid,
       behaviorText: outing.behaviorText,
+      behaviorIndex: picked.index,
       distanceKm: outing.distanceKm,
       arriveAt: now,
       leaveAt: now + outing.visitDuration
@@ -177,20 +192,25 @@ function tickOwnerOuting(ctx) {
 
   // visiting → return home + report
   if (outing.status === 'visiting' && now - outing.visitArriveAt >= outing.visitDuration) {
-    const report = buildReport(outing, displayCard.breed, settings.showDistance)
-    outing.unreadReport = report
-    if (onReturnHome) {
-      onReturnHome({
-        cardId: outing.cardId,
-        distanceKm: outing.distanceKm,
-        behaviorText: outing.behaviorText,
-        pet: outing.pet,
-        fed: outing.fed,
-        returnedAt: now,
-        leftAt: outing.leftAt
-      })
+    const visit = getVisit && getVisit(outing.visitId)
+    const log = {
+      cardId: outing.cardId,
+      visitId: outing.visitId || '',
+      distanceKm: outing.distanceKm,
+      behaviorText: outing.behaviorText,
+      behaviorIndex: Number.isInteger(outing.behaviorIndex) ? outing.behaviorIndex : -1,
+      catImage: pickCardImage(tripCard),
+      friend: (visit && visit.friend) || null,
+      simulated: !!(visit && String(visit.hostOpenId || '').startsWith('mock_host_')),
+      pet: !!outing.pet || !!(visit && visit.petByHost),
+      fed: !!outing.fed || !!(visit && visit.fedByHost),
+      returnedAt: now,
+      leftAt: outing.leftAt
     }
-    outing.status = 'home'
+    outing.unreadReport = buildReport({ ...outing, pet: log.pet, fed: log.fed }, tripCard, settings.showDistance, log)
+    if (onReturnHome) onReturnHome(log)
+    outing.status = displayCard ? 'home' : 'idle'
+    outing.cardId = displayCard ? displayCard._id : ''
     outing.homeSince = now
     outing.homeDuration = randBetween(DURATIONS.homeMin, DURATIONS.homeMax)
     outing.visitId = ''
@@ -227,6 +247,7 @@ module.exports = {
   defaultSettings,
   defaultOuting,
   ensureUserOutingFields,
+  isAway,
   todayKey,
   buildReport,
   tickOwnerOuting,

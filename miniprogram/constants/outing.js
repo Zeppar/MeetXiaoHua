@@ -1,9 +1,9 @@
 /**
  * 猫猫出门 · 规则与文案
- * debugFast: true 时 1「小时」= 30 秒，便于本地验收；上线前改为 false
+ * 调试按钮可手动推进阶段，正常计时始终使用真实小时
  */
 const DEBUG_FAST = true
-const HOUR_MS = DEBUG_FAST ? 30 * 1000 : 60 * 60 * 1000
+const HOUR_MS = 60 * 60 * 1000
 
 const BEHAVIORS = [
   '它在你门口打了个滚。',

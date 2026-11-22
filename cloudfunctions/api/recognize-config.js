@@ -61,6 +61,7 @@ function getRecognizeConfig() {
     },
     rembg: {
       url: process.env.REMBG_URL || local.REMBG_URL || '',
+      reidEnabled: String(process.env.CAT_REID_ENABLED || local.CAT_REID_ENABLED || '') === '1',
       // 默认轻量快速 u2netp；要更细可用 u2net / isnet-general-use
       model: process.env.REMBG_MODEL || local.REMBG_MODEL || 'u2netp',
       // Alpha matting 边缘细化（更慢，边缘更干净）

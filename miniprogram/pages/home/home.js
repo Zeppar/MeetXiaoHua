@@ -4,6 +4,7 @@ const copy = require('../../constants/copy')
 const { CAT_BREEDS } = require('../../constants/breeds')
 const { formatDateShort, cardDisplayName } = require('../../utils/format')
 const { pickCardImage } = require('../../utils/card-media')
+const { resolveHomeCards } = require('../../utils/room-mates')
 const nav = require('../../utils/navigate')
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六']
@@ -32,19 +33,24 @@ function toRecent(c) {
 }
 
 /** 「我的猫现在」：在家 / 出门 / 还没有 */
-function myCatOf(room) {
+function myCatOf(room, cards) {
   if (!room) return { status: 'none' }
-  const card = room.displayCard
-  if (room.myCatStatus === 'away') {
+  const user = room.user || {}
+  const outingCardId = room.outingCardId || (room.myCatStatus === 'away' &&
+    ((user.outing && user.outing.cardId) || user.displayCardId))
+  const { displayCard } = resolveHomeCards(user, cards, outingCardId, room.displayCard)
+  if (displayCard) {
+    const name = cache.getCardName(displayCard._id, displayCard.name || '')
+    return { status: 'home', name: cardDisplayName({ ...displayCard, name }), image: pickCardImage(displayCard) }
+  }
+  if (outingCardId || room.myCatStatus === 'away') {
+    const card = cards.find((item) => item._id === outingCardId)
     return {
       status: 'away',
       name: room.outingCatName || (card ? cardDisplayName(card) : '小猫'),
       image: card ? pickCardImage(card) : '',
       visiting: room.outingPhase === 'visiting'
     }
-  }
-  if (card && room.myCatStatus === 'home') {
-    return { status: 'home', name: cardDisplayName(card), image: pickCardImage(card) }
   }
   return { status: 'none' }
 }
@@ -63,7 +69,7 @@ Page({
     recentCount: 0,
     breedCount: 0,
     breedTotal: CAT_BREEDS.length,
-    myCat: { status: 'none' },
+    myCat: { status: 'loading' },
     hasReport: false,
     visitor: null,
     leftTrace: null,
@@ -93,8 +99,7 @@ Page({
     }
     const showPrivacy = !cache.isPrivacyAgreed()
     this.setData({ showPrivacy, greeting: greetingOf(), today: todayLabel() })
-    this.loadRecent()
-    this.loadRoom()
+    this.loadRoom(this.loadRecent())
   },
 
   noop() {},
@@ -125,23 +130,32 @@ Page({
       if (res.fromCache) {
         wx.showToast({ title: copy.tips.networkCache, icon: 'none' })
       }
+      return res.cards || []
     } catch (e) {
-      this.applyCards(cache.getCachedCards() || [])
+      const cards = cache.getCachedCards() || []
+      this.applyCards(cards)
+      return cards
     }
   },
 
-  async loadRoom() {
+  async loadRoom(cardsPromise) {
+    const request = (this._roomRequest || 0) + 1
+    this._roomRequest = request
     try {
-      const room = await api.getRoomState()
-      if (this.__mxhUnloaded) return
+      const [room, cards] = await Promise.all([api.getRoomState(), cardsPromise])
+      if (this.__mxhUnloaded || this._roomRequest !== request) return
+      const myCat = myCatOf(room, cards)
       this.setData({
-        myCat: myCatOf(room),
+        myCat,
         hasReport: !!(room && room.unreadReport),
         visitor: room && room.visitor ? { breed: room.visitor.breed, distanceLabel: room.visitor.distanceLabel } : null,
         leftTrace: room && !room.visitor && room.leftTrace ? { breed: room.leftTrace.breed, distanceLabel: room.leftTrace.distanceLabel } : null
       })
     } catch (e) {
       console.warn('[home] loadRoom fail', e)
+      if (!this.__mxhUnloaded && this._roomRequest === request && this.data.myCat.status === 'loading') {
+        this.setData({ myCat: { status: 'unavailable' } })
+      }
     }
   },
 

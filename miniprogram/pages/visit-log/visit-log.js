@@ -3,6 +3,7 @@ const copy = require('../../constants/copy')
 const { COPY } = require('../../constants/outing')
 const { formatDateTime } = require('../../utils/format')
 const pageLoad = require('../../utils/page-load')
+const { formatOutingPostcard } = require('../../utils/outing-postcard')
 
 /** 展示用：从「3.2 千米外的小屋」里取出数字，放进距离邮戳；关了距离则为空 */
 function pickKm(label) {
@@ -82,7 +83,7 @@ Page({
       ...l,
       timeLabel: formatDateTime(l.at || l.leaveAt || l.createdAt),
       distKm: pickKm(l.distanceLabel),
-      catImage: pickLogImage(l)
+      postcard: formatOutingPostcard(l, { catImage: pickLogImage(l), inbound: l.direction === 'inbound' })
     }))
     this.setData({
       logs: mapped,

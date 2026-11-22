@@ -392,12 +392,8 @@ module.exports = { km: km, clean: clean };
       </view>
       <view class="card-title">{{fmt.clean(report.title)}}</view>
       <view class="card-line">{{report.distanceLine}}</view>
-      <view wx:if="{{report.behaviorLine}}" class="card-hand hand">{{report.behaviorLine}}</view>
-      <view wx:if="{{report.interactLine}}" class="card-who">
-        <image class="card-who-ico" src="/assets/art/room-paw.svg" mode="aspectFit" />
-        <text>{{report.interactLine}}</text>
-      </view>
-      <button class="btn-primary btn-block card-btn" bindtap="onDismissReport">{{btnOk}}</button>
+      <outing-postcard postcard="{{report.postcard}}" />
+      <button class="btn-primary btn-block card-btn" bindtap="onDismissReport">收下明信片</button>
     </view>
   </view>
 

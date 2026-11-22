@@ -3,6 +3,7 @@
  * 集合：users / cards / memories / duels（duels 仅预留）
  */
 const cloud = require('wx-server-sdk')
+const { normalizePhotoIdentity, appendIdentity } = require('./photo-identity')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
@@ -22,9 +23,12 @@ function clampText(text, max) {
 }
 
 function normalizeGeo(geo) {
-  if (!geo || typeof geo.lat !== 'number' || typeof geo.lng !== 'number') return null
-  if (!Number.isFinite(geo.lat) || !Number.isFinite(geo.lng)) return null
-  return { lat: geo.lat, lng: geo.lng }
+  if (!geo || typeof geo !== 'object') return null
+  const lat = Number(geo.lat != null ? geo.lat : geo.latitude)
+  const lng = Number(geo.lng != null ? geo.lng : geo.longitude)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null
+  return { lat, lng }
 }
 
 function defaultSettings() {
@@ -84,8 +88,12 @@ function pickBehavior(lastIndex) {
   return { index, text: BEHAVIORS[index] }
 }
 
+function isAway(outing) {
+  return outing && (outing.status === 'out' || outing.status === 'visiting')
+}
+
 function normalizeUser(user) {
-  if (!user.settings) user.settings = defaultSettings()
+  user.settings = { ...defaultSettings(), ...user.settings }
   if (!user.outing) user.outing = defaultOuting()
   if (!user.fedDate) user.fedDate = ''
   return user
@@ -94,7 +102,22 @@ function normalizeUser(user) {
 async function ensureUser(openid) {
   const col = db.collection('users')
   const found = await col.where({ _openid: openid }).limit(1).get()
-  if (found.data && found.data.length) return normalizeUser(found.data[0])
+  if (found.data && found.data.length) {
+    const user = found.data[0]
+    const defaults = defaultSettings()
+    const missing = {}
+    if (!user.settings || typeof user.settings !== 'object') {
+      missing.settings = defaults
+    } else {
+      for (const key of Object.keys(defaults)) {
+        if (!Object.prototype.hasOwnProperty.call(user.settings, key)) {
+          missing['settings.' + key] = defaults[key]
+        }
+      }
+    }
+    if (Object.keys(missing).length) await col.doc(user._id).update({ data: missing })
+    return normalizeUser(user)
+  }
   // 云函数写入不会自动带用户 openid，必须显式写入
   const doc = {
     _openid: openid,
@@ -114,38 +137,8 @@ async function ensureUser(openid) {
   return { _id: addRes._id, _openid: openid, ...doc }
 }
 
-async function saveUser(user) {
-  const { _id, _openid, ...data } = user
-  await db.collection('users').doc(_id).update({
-    data: {
-      settings: data.settings,
-      outing: data.outing,
-      fedDate: data.fedDate || '',
-      displayCardId: data.displayCardId,
-      roomMateIds: Array.isArray(data.roomMateIds) ? data.roomMateIds : [],
-      roomBackgroundId: data.roomBackgroundId,
-      nickName: data.nickName,
-      avatarUrl: data.avatarUrl,
-      privacyAgreedAt: data.privacyAgreedAt,
-      stats: data.stats,
-      fuzzyGeo: data.fuzzyGeo || null
-    }
-  })
-}
-
 async function recomputeStats(openid) {
-  const _ = db.command
-  let cards = []
-  try {
-    const cardsRes = await db
-      .collection('cards')
-      .where(_.or([{ _openid: openid }, { ownerOpenId: openid }]))
-      .get()
-    cards = cardsRes.data || []
-  } catch (e) {
-    const cardsRes = await db.collection('cards').where({ _openid: openid }).get()
-    cards = cardsRes.data || []
-  }
+  const cards = await queryOwnedCards(openid)
   let memTotal = 0
   try {
     const memRes = await db
@@ -202,15 +195,9 @@ async function updateProfile(openid, payload = {}) {
       .slice(0, 2)
   }
   if (payload.settings) {
-    data.settings = Object.assign({}, user.settings || defaultSettings(), payload.settings)
-  }
-  if (payload.displayCardId && payload.displayCardId !== user.displayCardId) {
-    data.outing = Object.assign({}, user.outing || defaultOuting(), {
-      status: 'home',
-      cardId: payload.displayCardId,
-      homeSince: Date.now(),
-      homeDuration: randBetweenHours(6, 12)
-    })
+    for (const key of Object.keys(defaultSettings())) {
+      if (typeof payload.settings[key] === 'boolean') data['settings.' + key] = payload.settings[key]
+    }
   }
   if (Object.keys(data).length) {
     await db.collection('users').doc(user._id).update({ data })
@@ -305,6 +292,35 @@ async function runMatting(event = {}, openid = '') {
   return out
 }
 
+async function embedCatPhoto(openid, imageBase64) {
+  const { rembg } = require('./recognize-config').getRecognizeConfig()
+  if (!openid || !rembg.url || !rembg.reidEnabled) return { code: 'DISABLED' }
+  if (typeof imageBase64 !== 'string' || !imageBase64 || imageBase64.length > 350000 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(imageBase64)) return { code: 'BAD_IMAGE' }
+  const url = new URL(rembg.url.trim())
+  const path = url.pathname.split('/').filter(Boolean)
+  if (path[path.length - 1] === 'remove' && path[path.length - 2] === 'api') path.splice(-2)
+  url.pathname = '/' + [...path, 'api', 'embed'].join('/')
+  url.search = ''
+  const { request } = require('./http-util')
+  try {
+    const result = await request(url.toString(), {
+      method: 'POST',
+      body: Buffer.from(imageBase64, 'base64'),
+      headers: {
+        'Content-Type': 'image/jpeg',
+        ...(rembg.token ? { 'X-Rembg-Token': rembg.token } : {})
+      },
+      timeoutMs: 3200
+    })
+    if (result.statusCode === 404 || result.statusCode === 503) return { code: 'DISABLED' }
+    const identity = normalizePhotoIdentity(result.json)
+    return { embedding: identity ? identity.embedding : '' }
+  } catch (e) {
+    return { code: 'UNAVAILABLE' }
+  }
+}
+
 function cardBelongsTo(card, openid) {
   if (!card || !openid) return false
   if (card._openid === openid) return true
@@ -359,28 +375,28 @@ async function repairOrphanCards(openid) {
   return { repaired, count: repaired.length, scanned }
 }
 
-async function listCards(openid, { limit = 100, breed } = {}) {
-  // 先走单字段 _openid（有索引、快）；空再补查 ownerOpenId。不做每次自动 repair。
-  let q = db.collection('cards').where({ _openid: openid })
-  if (breed && breed !== '全部') {
-    q = db.collection('cards').where({ _openid: openid, breed })
-  }
-  let res = await q.orderBy('shotAt', 'desc').limit(limit).get()
-  let cards = res.data || []
-
-  if (!cards.length) {
-    try {
-      let q2 = db.collection('cards').where({ ownerOpenId: openid })
-      if (breed && breed !== '全部') {
-        q2 = db.collection('cards').where({ ownerOpenId: openid, breed })
-      }
-      const res2 = await q2.orderBy('shotAt', 'desc').limit(limit).get()
-      cards = res2.data || []
-    } catch (e) {
-      console.warn('listCards ownerOpenId query fail', e)
+async function queryOwnedCards(openid, { limit = Infinity, breed } = {}) {
+  const condition = breed && breed !== '全部' ? { breed } : {}
+  const cards = new Map()
+  const pageSize = 100
+  for (const field of ['_openid', 'ownerOpenId']) {
+    const query = db.collection('cards').where({ ...condition, [field]: openid })
+      .orderBy('shotAt', 'desc')
+    for (let offset = 0; offset < limit; offset += pageSize) {
+      const size = Math.min(pageSize, limit - offset)
+      const { data = [] } = await query.skip(offset).limit(size).get()
+      data.forEach((card) => cards.set(card._id, card))
+      if (data.length < size) break
     }
   }
-  return { cards }
+  return Array.from(cards.values()).sort((a, b) =>
+    (b.shotAt || 0) - (a.shotAt || 0) || a._id.localeCompare(b._id)
+  ).slice(0, limit)
+}
+
+async function listCards(openid, { limit = 100, breed } = {}) {
+  const size = Math.min(100, Math.max(1, Math.floor(Number(limit) || 100)))
+  return { cards: await queryOwnedCards(openid, { limit: size, breed }) }
 }
 
 async function getCard(openid, cardId) {
@@ -420,41 +436,61 @@ async function createCard(openid, payload = {}) {
   if (!geo) {
     return { error: '需要位置信息才能记录相遇', code: 'GEO_REQUIRED' }
   }
+  const doc = buildCard(openid, payload, geo)
+  if (doc.clientId) {
+    try {
+      const dup = await db.collection('cards').where({ _openid: openid, clientId: doc.clientId }).limit(1).get()
+      if (dup.data && dup.data[0]) return { card: dup.data[0], deduped: true }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  const addRes = await db.collection('cards').add({ data: doc })
+  if (doc.pendingBreed) {
+    const rev = await db.collection('breed_reviews').add({
+      data: {
+        _openid: openid,
+        cardId: addRes._id,
+        fromBreed: doc.breed,
+        toBreed: doc.pendingBreed,
+        recognizedBreed: doc.recognizedBreed,
+        status: 'pending',
+        createdAt: Date.now()
+      }
+    })
+    await db.collection('cards').doc(addRes._id).update({ data: { breedReviewId: rev._id } })
+    doc.breedReviewId = rev._id
+  }
+  await recomputeStats(openid)
+  return { card: { _id: addRes._id, ...doc } }
+}
+
+function buildCard(openid, payload, geo) {
   const recognizedBreed = normalizeRecognizedBreedCloud(
     payload.recognizedBreed !== undefined ? payload.recognizedBreed : payload.breed
   )
   let breed = clampText(payload.breed || '', 20) || UNKNOWN_LABEL
   let pendingBreed = ''
   let breedReviewStatus = ''
-  let breedReviewId = ''
   if (payload.breedManual && breed && (!recognizedBreed || breed !== recognizedBreed)) {
     pendingBreed = breed
     breedReviewStatus = 'pending'
     breed = recognizedBreed || '待识别'
   }
-  // 幂等：客户端带本地卡 id，重试/超时后再次提交时直接返回已建的卡
-  const clientId = clampText(payload.clientId || '', 64)
-  if (clientId) {
-    try {
-      const dup = await db.collection('cards').where({ _openid: openid, clientId }).limit(1).get()
-      if (dup.data && dup.data[0]) return { card: dup.data[0], deduped: true }
-    } catch (e) {
-      /* ignore */
-    }
-  }
-  const doc = {
+  return {
     _openid: openid,
     ownerOpenId: openid,
-    clientId,
+    clientId: clampText(payload.clientId || '', 64),
     cutoutFileId: payload.cutoutFileId || '',
     originalFileId: payload.originalFileId || '',
     cutoutPath: payload.cutoutPath || '',
     originalPath: payload.originalPath || '',
+    photoIdentities: appendIdentity([], normalizePhotoIdentity(payload.photoIdentity)),
     breed,
     recognizedBreed,
     pendingBreed,
     breedReviewStatus,
-    breedReviewId,
+    breedReviewId: '',
     name: clampText(payload.name || '', 12),
     confidence: payload.confidence || 0,
     shotAt: payload.shotAt || Date.now(),
@@ -469,24 +505,6 @@ async function createCard(openid, payload = {}) {
     recordStats: { duelWins: 0, duelLosses: 0, lastDuelAt: 0 },
     createdAt: Date.now()
   }
-  const addRes = await db.collection('cards').add({ data: doc })
-  if (pendingBreed) {
-    const rev = await db.collection('breed_reviews').add({
-      data: {
-        _openid: openid,
-        cardId: addRes._id,
-        fromBreed: breed,
-        toBreed: pendingBreed,
-        recognizedBreed,
-        status: 'pending',
-        createdAt: Date.now()
-      }
-    })
-    await db.collection('cards').doc(addRes._id).update({ data: { breedReviewId: rev._id } })
-    doc.breedReviewId = rev._id
-  }
-  await recomputeStats(openid)
-  return { card: { _id: addRes._id, ...doc } }
 }
 
 async function updateCard(openid, cardId, patch = {}) {
@@ -507,7 +525,11 @@ async function updateCard(openid, cardId, patch = {}) {
   }
   if (patch.note !== undefined) data.note = clampText(patch.note, 100)
   if (patch.placeText !== undefined) data.placeText = clampText(patch.placeText, 30)
-  if (patch.geo !== undefined) data.geo = patch.geo
+  if (patch.geo !== undefined) {
+    const geo = normalizeGeo(patch.geo)
+    if (patch.geo !== null && !geo) return { error: 'invalid geo', code: 'BAD_REQUEST' }
+    data.geo = _.set(geo)
+  }
   if (patch.intimacy !== undefined) {
     data.intimacy = Math.max(0, Math.min(100, Math.round(Number(patch.intimacy) || 0)))
   }
@@ -770,6 +792,7 @@ async function listMemories(openid, cardId) {
 async function createMemory(openid, payload = {}) {
   const { card } = await getCard(openid, payload.cardId)
   if (!card) return { error: 'card not found', code: 'NOT_FOUND' }
+  const identity = normalizePhotoIdentity(payload.photoIdentity)
   const doc = {
     _openid: openid,
     ownerOpenId: openid,
@@ -779,11 +802,19 @@ async function createMemory(openid, payload = {}) {
     imagePath: payload.imagePath || '',
     createdAt: Date.now()
   }
-  const addRes = await db.collection('memories').add({ data: doc })
-  const countRes = await db.collection('memories').where({ cardId: payload.cardId }).count()
-  await db.collection('cards').doc(payload.cardId).update({ data: { memoryCount: countRes.total } })
-  await recomputeStats(openid)
-  return { memory: { _id: addRes._id, ...doc } }
+  const memory = await db.runTransaction(async (tx) => {
+    const ref = tx.collection('cards').doc(payload.cardId)
+    const current = await readDocument(ref)
+    if (!cardBelongsTo(current, openid)) return null
+    const result = await tx.collection('memories').add({ data: doc })
+    const data = { memoryCount: _.inc(1) }
+    if (identity) data.photoIdentities = appendIdentity(current.photoIdentities, identity)
+    await ref.update({ data })
+    return { _id: result._id, ...doc }
+  })
+  if (!memory) return { error: 'card not found', code: 'NOT_FOUND' }
+  await recomputeStats(openid).catch((e) => console.warn('create memory stats fail', e))
+  return { memory }
 }
 
 async function deleteMemory(openid, memoryId) {
@@ -798,9 +829,9 @@ async function deleteMemory(openid, memoryId) {
 }
 
 async function breedFilters(openid) {
-  const res = await db.collection('cards').where({ _openid: openid }).get()
-  const counts = {}
-  ;(res.data || []).forEach((c) => {
+  const cards = await queryOwnedCards(openid)
+  const counts = Object.create(null)
+  cards.forEach((c) => {
     counts[c.breed] = (counts[c.breed] || 0) + 1
   })
   const filters = Object.keys(counts)
@@ -834,40 +865,100 @@ function todayKey(now = Date.now()) {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
 }
 
-function buildReport(outing, breed, showDistance) {
+// 明信片只带猫的立绘，和串门访客展示的信息范围一致。
+async function pickOutingFriend(tx, host) {
+  if (!host.displayCardId) return null
+  if (isAway(host.outing) && host.outing.cardId === host.displayCardId) return null
+  const resident = await readDocument(tx.collection('cards').doc(host.displayCardId))
+  if (!cardBelongsTo(resident, host._openid)) return null
+  const image = [resident.cutoutFileId, resident.cutoutPath].find((path) => /^cloud:\/\//.test(path || ''))
+  return image ? { image, kind: 'photo' } : null
+}
+
+function buildReport(outing, card, showDistance, log) {
   const distLabel = formatDistanceLabel(outing.distanceKm, showDistance)
+  const breed = card.breed
   let interactLine = '它在那里待了一会儿。'
   if (outing.pet) interactLine = '有人摸了摸它。'
   if (outing.fed) interactLine = outing.pet ? '有人摸了摸它。有人给了它一颗猫粮。' : '有人给了它一颗猫粮。'
   return {
     title: '🐾 它回来了',
-    distanceLine: `你的${(['待识别', '识别中…', '未知小动物'].indexOf(breed) >= 0 ? '' : breed) || '小猫'}去了一趟「${distLabel}」`,
+    distanceLine: `${card.name || '你的' + ((['待识别', '识别中…', '未知小动物'].indexOf(breed) >= 0 ? '' : breed) || '小猫')}去了一趟「${distLabel}」`,
     behaviorLine: outing.behaviorText || '',
     interactLine,
-    createdAt: Date.now()
+    catImage: log.catImage,
+    behaviorIndex: log.behaviorIndex,
+    friend: log.friend,
+    pet: log.pet,
+    fed: log.fed,
+    simulated: log.simulated,
+    createdAt: log.returnedAt
   }
 }
 
 async function releaseCard(openid, cardId) {
   const { card } = await getCard(openid, cardId)
-  if (!card) return { error: 'card not found', code: 'NOT_FOUND' }
-  if (card.breedReviewStatus === 'pending' || card.pendingBreed) {
-    return { error: '审核中不能放生', code: 'PENDING' }
+  if (!card) {
+    const { data } = await db.collection('released_cats').where({ releasedBy: openid, cardId }).limit(1).get()
+    return data && data[0]
+      ? { ok: true, released: data[0], toast: '它自由了。以后也许会去别人家串门。' }
+      : { error: 'card not found', code: 'NOT_FOUND' }
   }
 
-  await db.collection('released_cats').add({
-    data: {
+  const user = await ensureUser(openid)
+  const { cards: remaining } = await listCards(openid, { limit: 2 })
+  // 兼容旧版在切换展示猫时丢失行程引用，但访问还未结束的记录。
+  const now = Date.now()
+  const active = await db.collection('visits').where({
+    ownerOpenId: openid, guestCardId: cardId, status: 'active', leaveAt: _.gt(now)
+  }).limit(100).get()
+  if (active.data.some((v) => !v.fromReleased)) {
+    return { error: '这只猫还在外面，回来后才能放生', code: 'CAT_AWAY' }
+  }
+
+  const result = await db.runTransaction(async (tx) => {
+    const userRef = tx.collection('users').doc(user._id)
+    const cardRef = tx.collection('cards').doc(cardId)
+    const current = normalizeUser((await userRef.get()).data)
+    const cat = await readDocument(cardRef)
+    if (!cardBelongsTo(cat, openid)) return { error: 'card not found', code: 'NOT_FOUND' }
+    if (isAway(current.outing) && current.outing.cardId === cardId) {
+      return { error: '这只猫还在外面，回来后才能放生', code: 'CAT_AWAY' }
+    }
+    if (cat.breedReviewStatus === 'pending' || cat.pendingBreed) {
+      return { error: '审核中不能放生', code: 'PENDING' }
+    }
+
+    const roomMateIds = Array.isArray(current.roomMateIds)
+      ? current.roomMateIds.filter((id) => id && id !== cardId)
+      : []
+    let displayCardId = current.displayCardId || ''
+    if (displayCardId === cardId) {
+      const next = remaining.find((item) => item._id !== cardId)
+      displayCardId = roomMateIds.shift() || (next && next._id) || ''
+    }
+    const room = { displayCardId, roomMateIds }
+    if (!isAway(current.outing) && current.outing.cardId === cardId) {
+      room.outing = Object.assign({}, current.outing, {
+        status: displayCardId ? 'home' : 'idle',
+        cardId: displayCardId,
+        homeSince: displayCardId ? now : 0,
+        homeDuration: displayCardId ? randBetweenHours(6, 12) : 0
+      })
+    }
+
+    const released = {
       _openid: openid,
       ownerOpenId: openid,
-      cardId: card._id,
-      breed: card.breed || '待识别',
-      name: card.name || '',
-      cutoutPath: card.cutoutPath || '',
-      originalPath: card.originalPath || '',
-      cutoutFileId: card.cutoutFileId || '',
-      originalFileId: card.originalFileId || '',
+      cardId,
+      breed: cat.breed || '待识别',
+      name: cat.name || '',
+      cutoutPath: cat.cutoutPath || '',
+      originalPath: cat.originalPath || '',
+      cutoutFileId: cat.cutoutFileId || '',
+      originalFileId: cat.originalFileId || '',
       releasedBy: openid,
-      releasedAt: Date.now(),
+      releasedAt: now,
       visitCount: 0,
       lastVisitAt: 0,
       status: 'wandering',
@@ -875,33 +966,13 @@ async function releaseCard(openid, cardId) {
       adoptedAt: 0,
       adoptedCardId: ''
     }
+    const added = await tx.collection('released_cats').add({ data: released })
+    await cardRef.remove()
+    await userRef.update({ data: room })
+    return { ok: true, room, released: { _id: added._id, ...released }, toast: '它自由了。以后也许会去别人家串门。' }
   })
-
-  try {
-    await db.collection('cards').doc(cardId).remove()
-  } catch (e) {
-    console.warn('release remove card fail', e)
-  }
-
-  const user = await ensureUser(openid)
-  if (user.displayCardId === cardId) {
-    const rest = await listCards(openid, { limit: 1 })
-    const next = (rest.cards || [])[0]
-    const data = {
-      displayCardId: next ? next._id : '',
-      outing: Object.assign({}, user.outing || defaultOuting(), next
-        ? {
-            status: 'home',
-            cardId: next._id,
-            homeSince: Date.now(),
-            homeDuration: randBetweenHours(6, 12)
-          }
-        : { status: 'idle', cardId: '' })
-    }
-    await db.collection('users').doc(user._id).update({ data })
-  }
-  await recomputeStats(openid)
-  return { ok: true, toast: '它自由了。以后也许会去别人家串门。' }
+  if (result.ok) await recomputeStats(openid).catch((e) => console.warn('release stats fail', e))
+  return result
 }
 
 /** 把放生池里的猫随机送到当前小屋串门 */
@@ -945,103 +1016,118 @@ async function maybeSpawnReleasedVisitor(openid, now) {
         ? `流浪的「${pick.name}」来串门了。`
         : '一只被放生的小猫路过你家，停了下来。'
 
-  const leaveAt = now + randBetweenHours(1, 4)
-  const add = await db.collection('visits').add({
-    data: {
-      hostOpenId: openid,
-      ownerOpenId: pick.releasedBy || 'released',
-      guestCardId: pick.cardId || '',
-      releasedId: pick._id,
-      breed: pick.breed || '待识别',
-      cutoutPath: pick.cutoutFileId || pick.cutoutPath || '',
-      behaviorText,
-      distanceKm: Math.round((0.5 + Math.random() * 7.5) * 10) / 10,
-      arriveAt: now,
-      leaveAt,
-      status: 'active',
-      petByHost: false,
-      fedByHost: false,
-      seenLeft: false,
-      fromReleased: true,
-      canAdopt: true
-    }
-  })
+  return db.runTransaction(async (tx) => {
+    const userRef = tx.collection('users').doc(user._id)
+    const releasedRef = tx.collection('released_cats').doc(pick._id)
+    const current = normalizeUser((await userRef.get()).data)
+    const released = await readDocument(releasedRef)
+    if (!current.settings.allowVisitors || now - (current._lastReleasedVisitorAt || 0) < 2 * HOUR_MS) return null
+    if (!released || released.status !== 'wandering') return null
 
-  try {
-    await db.collection('released_cats').doc(pick._id).update({
+    const added = await tx.collection('visits').add({
       data: {
-        status: 'visiting',
-        visitCount: (pick.visitCount || 0) + 1,
-        lastVisitAt: now
+        hostOpenId: openid,
+        ownerOpenId: released.releasedBy || 'released',
+        guestCardId: released.cardId || '',
+        releasedId: released._id,
+        breed: released.breed || '待识别',
+        name: released.name || '',
+        cutoutPath: released.cutoutFileId || released.cutoutPath || '',
+        behaviorText,
+        distanceKm: Math.round((0.5 + Math.random() * 7.5) * 10) / 10,
+        arriveAt: now,
+        leaveAt: now + randBetweenHours(1, 4),
+        status: 'active',
+        petByHost: false,
+        fedByHost: false,
+        seenLeft: false,
+        fromReleased: true,
+        canAdopt: true
       }
     })
-  } catch (e) {
-    /* ignore */
-  }
-
-  await db.collection('users').doc(user._id).update({
-    data: { _lastReleasedVisitorAt: now }
+    await releasedRef.update({
+      data: { status: 'visiting', visitCount: (released.visitCount || 0) + 1, lastVisitAt: now }
+    })
+    await userRef.update({ data: { _lastReleasedVisitorAt: now } })
+    return added._id
   })
-
-  return add._id
 }
 
-async function writeVisitLog(openid, entry) {
-  await db.collection('visitLogs').add({
-    data: {
-      _openid: openid,
-      createdAt: Date.now(),
-      ...entry
-    }
+async function readDocument(ref) {
+  try {
+    return (await ref.get()).data || null
+  } catch (e) {
+    if (e.errCode === -502001 && /not exist|not found|不存在/i.test(e.message || e.errMsg || '')) return null
+    throw e
+  }
+}
+
+async function writeVisitLog(store, openid, entry) {
+  await store.collection('visitLogs').add({
+    data: { _openid: openid, createdAt: Date.now(), ...entry }
   })
+}
+
+async function finishVisit(tx, visit, now, { adopted = false, released } = {}) {
+  if (visit.loggedInbound) return
+  const visitRef = tx.collection('visits').doc(visit._id)
+  if (visit.releasedId && !adopted && visit.status === 'active') {
+    const releasedRef = tx.collection('released_cats').doc(visit.releasedId)
+    const current = await readDocument(releasedRef)
+    if (current && current.status === 'visiting') {
+      await releasedRef.update({ data: { status: 'wandering' } })
+    }
+  }
+  if (visit.hostOpenId && !visit.hostOpenId.startsWith('mock_')) {
+    const leaveAt = adopted ? now : visit.leaveAt || now
+    await writeVisitLog(tx, visit.hostOpenId, {
+      direction: 'inbound',
+      visitId: visit._id,
+      breed: visit.breed || '小猫',
+      name: (released && released.name) || visit.name || '',
+      cutoutPath: visit.cutoutPath || '',
+      behaviorText: visit.behaviorText || '',
+      ...(Number.isInteger(visit.behaviorIndex) ? { behaviorIndex: visit.behaviorIndex } : {}),
+      ...(visit.friend ? { friend: visit.friend } : {}),
+      distanceKm: visit.distanceKm || 0,
+      fromReleased: !!visit.fromReleased,
+      pet: !!visit.petByHost,
+      fed: !!visit.fedByHost,
+      adopted: adopted || !!visit.adoptedByHost,
+      arriveAt: visit.arriveAt || 0,
+      leaveAt,
+      at: leaveAt
+    })
+  }
+  const data = { status: 'left', loggedInbound: true }
+  if (adopted) Object.assign(data, { seenLeft: true, adoptedByHost: true, canAdopt: false })
+  await visitRef.update({ data })
 }
 
 async function expireHostVisits(openid, now) {
-  const res = await db.collection('visits').where({ hostOpenId: openid, status: 'active' }).get()
-  for (const v of res.data || []) {
-    if (now >= v.leaveAt) {
-      await db.collection('visits').doc(v._id).update({ data: { status: 'left', loggedInbound: true } })
-      try {
-        await writeVisitLog(openid, {
-          direction: 'inbound',
-          visitId: v._id,
-          breed: v.breed || '小猫',
-          name: v.name || '',
-          cutoutPath: v.cutoutPath || '',
-          behaviorText: v.behaviorText || '',
-          distanceKm: v.distanceKm || 0,
-          fromReleased: !!v.fromReleased,
-          pet: !!v.petByHost,
-          fed: !!v.fedByHost,
-          adopted: !!v.adoptedByHost,
-          arriveAt: v.arriveAt || 0,
-          leaveAt: v.leaveAt || now,
-          at: v.leaveAt || now
-        })
-      } catch (e) {
-        console.warn('write inbound visitLog fail', e)
+  const visits = db.collection('visits')
+  const { data = [] } = await visits.where({ hostOpenId: openid, status: 'active' }).limit(100).get()
+  for (const candidate of data) {
+    if (now < candidate.leaveAt) continue
+    await db.runTransaction(async (tx) => {
+      const visit = await readDocument(tx.collection('visits').doc(candidate._id))
+      if (visit && visit.status === 'active' && now >= visit.leaveAt) {
+        await finishVisit(tx, visit, now)
       }
-      if (v.releasedId) {
-        try {
-          const rel = await db.collection('released_cats').doc(v.releasedId).get()
-          if (rel.data && rel.data.status === 'visiting') {
-            await db.collection('released_cats').doc(v.releasedId).update({ data: { status: 'wandering' } })
-          }
-        } catch (e) {
-          /* ignore */
-        }
-      }
-      if (v.ownerOpenId) {
-        const owners = await db.collection('users').where({ _openid: v.ownerOpenId }).limit(1).get()
-        const owner = owners.data && owners.data[0]
-        if (owner && owner.outing && owner.outing.visitId === v._id) {
-          const outing = owner.outing
-          if (v.petByHost) outing.pet = true
-          if (v.fedByHost) outing.fed = true
-          await db.collection('users').doc(owner._id).update({ data: { outing } })
-        }
-      }
-    }
+    })
+  }
+}
+
+async function backfillInboundVisitLogs(openid) {
+  const { data = [] } = await db.collection('visits')
+    .where({ hostOpenId: openid, status: 'left' })
+    .orderBy('leaveAt', 'desc').limit(100).get()
+  for (const candidate of data) {
+    if (candidate.loggedInbound) continue
+    await db.runTransaction(async (tx) => {
+      const visit = await readDocument(tx.collection('visits').doc(candidate._id))
+      if (visit && visit.status === 'left') await finishVisit(tx, visit, Date.now())
+    })
   }
 }
 
@@ -1090,79 +1176,52 @@ async function adoptVisitor(openid, { visitId, geo, placeText } = {}) {
   if (!nextGeo) {
     return { error: '需要位置信息才能收养', code: 'GEO_REQUIRED' }
   }
-  const res = await db.collection('visits').doc(visitId).get()
-  const visit = res.data
-  if (!visit || visit.hostOpenId !== openid || visit.status !== 'active') {
-    return { error: '小猫已经走了', code: 'GONE' }
-  }
-  if (!visit.fromReleased || !visit.releasedId) {
-    return { error: '这只不是放生猫', code: 'BAD_REQUEST' }
-  }
-
-  let released = null
-  try {
-    const r = await db.collection('released_cats').doc(visit.releasedId).get()
-    released = r.data
-  } catch (e) {
-    return { error: '找不到放生记录', code: 'NOT_FOUND' }
-  }
-  if (!released || released.status === 'adopted') {
-    return { error: '它已经被收养了', code: 'GONE' }
-  }
-
-  const created = await createCard(openid, {
-    cutoutPath: released.cutoutFileId || released.cutoutPath || visit.cutoutPath || '',
-    originalPath: released.originalFileId || released.originalPath || '',
-    cutoutFileId: released.cutoutFileId || '',
-    originalFileId: released.originalFileId || '',
-    breed: released.breed || visit.breed || '待识别',
-    name: released.name || '',
-    confidence: 100,
-    shotAt: Date.now(),
-    note: '从门口收养的流浪猫',
-    placeText: placeText || '我家门口',
-    geo: nextGeo,
-    intimacy: 18,
-    mattingFailed: !(released.cutoutFileId || released.cutoutPath)
-  })
-  if (created && created.error) return created
-
-  await db.collection('released_cats').doc(visit.releasedId).update({
-    data: {
-      status: 'adopted',
-      adoptedBy: openid,
-      adoptedAt: Date.now(),
-      adoptedCardId: (created.card && created.card._id) || ''
+  await ensureUser(openid)
+  const result = await db.runTransaction(async (tx) => {
+    const now = Date.now()
+    const visit = await readDocument(tx.collection('visits').doc(visitId))
+    if (!visit || visit.hostOpenId !== openid) {
+      return { error: '小猫已经走了', code: 'GONE' }
     }
-  })
-  await db.collection('visits').doc(visitId).update({
-    data: { status: 'left', seenLeft: true, adoptedByHost: true, canAdopt: false, loggedInbound: true }
-  })
-  try {
-    await writeVisitLog(openid, {
-      direction: 'inbound',
-      visitId,
-      breed: visit.breed || released.breed || '小猫',
-      name: released.name || '',
-      cutoutPath: visit.cutoutPath || released.cutoutPath || '',
-      behaviorText: visit.behaviorText || '',
-      distanceKm: visit.distanceKm || 0,
-      fromReleased: true,
-      pet: !!visit.petByHost,
-      fed: !!visit.fedByHost,
-      adopted: true,
-      arriveAt: visit.arriveAt || 0,
-      leaveAt: Date.now(),
-      at: Date.now()
-    })
-  } catch (e) {
-    console.warn('adopt visitLog fail', e)
-  }
+    if (!visit.fromReleased || !visit.releasedId) {
+      return { error: '这只不是放生猫', code: 'BAD_REQUEST' }
+    }
+    const releasedRef = tx.collection('released_cats').doc(visit.releasedId)
+    const released = await readDocument(releasedRef)
+    if (visit.adoptedByHost && released && released.adoptedBy === openid && released.adoptedCardId) {
+      const card = await readDocument(tx.collection('cards').doc(released.adoptedCardId))
+      if (cardBelongsTo(card, openid)) return { card, toast: '你收养了它，它有新家了' }
+    }
+    if (visit.status !== 'active' || now >= visit.leaveAt) {
+      return { error: '小猫已经走了', code: 'GONE' }
+    }
+    if (!released || released.status === 'adopted') {
+      return { error: '它已经被收养了', code: 'GONE' }
+    }
 
-  return {
-    card: created.card,
-    toast: '你收养了它，它有新家了'
-  }
+    const doc = buildCard(openid, {
+      cutoutPath: released.cutoutFileId || released.cutoutPath || visit.cutoutPath || '',
+      originalPath: released.originalFileId || released.originalPath || '',
+      cutoutFileId: released.cutoutFileId || '',
+      originalFileId: released.originalFileId || '',
+      breed: released.breed || visit.breed || '待识别',
+      name: released.name || '',
+      confidence: 100,
+      note: '从门口收养的流浪猫',
+      placeText: placeText || '我家门口',
+      intimacy: 18,
+      mattingFailed: !(released.cutoutFileId || released.cutoutPath)
+    }, nextGeo)
+    doc.adoptedFromReleasedId = released._id
+    const added = await tx.collection('cards').add({ data: doc })
+    await releasedRef.update({
+      data: { status: 'adopted', adoptedBy: openid, adoptedAt: now, adoptedCardId: added._id }
+    })
+    await finishVisit(tx, visit, now, { adopted: true, released })
+    return { card: { _id: added._id, ...doc }, toast: '你收养了它，它有新家了' }
+  })
+  if (result.card) await recomputeStats(openid).catch((e) => console.warn('adoption stats fail', e))
+  return result
 }
 
 async function pickVisitHost(excludeOpenId) {
@@ -1178,147 +1237,113 @@ async function pickVisitHost(excludeOpenId) {
   return null
 }
 
+function needsOutingTick(user, now) {
+  const outing = user.outing
+  if (outing.status === 'out') return now - outing.leftAt >= outing.travelDuration
+  if (outing.status === 'visiting') return now - outing.visitArriveAt >= outing.visitDuration
+  const cardId = user.displayCardId || ''
+  if (!cardId) return outing.status !== 'idle'
+  if (!user.settings.allowMyCatOut) return false
+  return outing.status !== 'home' || outing.cardId !== cardId ||
+    now - outing.homeSince >= outing.homeDuration
+}
+
+async function advanceOuting(openid, user, now) {
+  if (!needsOutingTick(user, now)) return user
+  const host = user.outing.status === 'out' ? await pickVisitHost(openid) : null
+  const meetsFriend = user.outing.status === 'out' && Math.random() < 0.3
+  return db.runTransaction(async (tx) => {
+    const userRef = tx.collection('users').doc(user._id)
+    const current = normalizeUser((await userRef.get()).data)
+    if (!needsOutingTick(current, now)) return current
+    const outing = current.outing
+    const cardId = isAway(outing) ? outing.cardId : current.displayCardId
+    const card = cardId ? await readDocument(tx.collection('cards').doc(cardId)) : null
+    const owned = cardBelongsTo(card, openid)
+    if (!owned && !isAway(outing) && cardId) return current
+    if (!owned) {
+      Object.assign(outing, { status: 'idle', cardId: '', visitId: '', hostKey: '' })
+    } else if (!isAway(outing) && (outing.status !== 'home' || outing.cardId !== cardId)) {
+      Object.assign(outing, {
+        status: 'home', cardId, homeSince: now, homeDuration: randBetweenHours(6, 12)
+      })
+    } else if (outing.status === 'home') {
+      Object.assign(outing, {
+        status: 'out', leftAt: now, travelDuration: randBetweenHours(2, 6),
+        pet: false, fed: false, visitId: '', hostKey: ''
+      })
+    } else if (outing.status === 'out') {
+      const picked = pickBehavior(outing.lastBehaviorIndex)
+      const distanceKm = Math.round((0.5 + Math.random() * 7.5) * 10) / 10
+      const visitDuration = randBetweenHours(2, 6)
+      const currentHost = host ? await readDocument(tx.collection('users').doc(host._id)) : null
+      const visitingHost = currentHost && currentHost.settings && currentHost.settings.allowVisitors ? currentHost : null
+      const hostOpenId = visitingHost ? visitingHost._openid : 'mock_' + openid
+      let friend = null
+      if (meetsFriend) {
+        friend = visitingHost
+          ? await pickOutingFriend(tx, visitingHost)
+          : { name: '麦团', image: '/assets/illus/map-cat-2.png', kind: 'illustration' }
+      }
+      const added = await tx.collection('visits').add({
+        data: {
+          hostOpenId, ownerOpenId: openid, guestCardId: cardId,
+          breed: card.breed || '小猫',
+          name: card.name || '',
+          cutoutPath: card.cutoutFileId || card.cutoutPath || card.originalFileId || card.originalPath || '',
+          behaviorText: picked.text, behaviorIndex: picked.index, friend,
+          distanceKm, arriveAt: now, leaveAt: now + visitDuration,
+          status: 'active', petByHost: false, fedByHost: false, seenLeft: false
+        }
+      })
+      Object.assign(outing, {
+        status: 'visiting', behaviorIndex: picked.index, behaviorText: picked.text,
+        lastBehaviorIndex: picked.index, distanceKm, visitArriveAt: now, visitDuration,
+        visitId: added._id, hostKey: hostOpenId
+      })
+    } else if (outing.status === 'visiting') {
+      const visit = outing.visitId
+        ? await readDocument(tx.collection('visits').doc(outing.visitId))
+        : null
+      const ownVisit = visit && visit.ownerOpenId === openid && visit.guestCardId === cardId ? visit : null
+      if (ownVisit) {
+        outing.pet = outing.pet || !!ownVisit.petByHost
+        outing.fed = outing.fed || !!ownVisit.fedByHost
+        await finishVisit(tx, ownVisit, now)
+      }
+      const log = {
+        cardId, visitId: outing.visitId || '', distanceKm: outing.distanceKm || 0, behaviorText: outing.behaviorText || '',
+        behaviorIndex: Number.isInteger(outing.behaviorIndex) ? outing.behaviorIndex : -1,
+        catImage: card.cutoutFileId || card.cutoutPath || card.originalFileId || card.originalPath || '',
+        friend: (ownVisit && ownVisit.friend) || null,
+        simulated: !!(ownVisit && ownVisit.hostOpenId === 'mock_' + openid),
+        pet: !!outing.pet, fed: !!outing.fed, leftAt: outing.leftAt, returnedAt: now
+      }
+      await tx.collection('outingLogs').add({ data: { _openid: openid, ...log } })
+      await writeVisitLog(tx, openid, {
+        ...log, direction: 'outbound',
+        breed: card.breed || '小猫', name: card.name || '',
+        cutoutPath: card.cutoutFileId || card.cutoutPath || '',
+        leaveAt: now, at: now
+      })
+      const nextCardId = current.displayCardId || ''
+      Object.assign(outing, {
+        unreadReport: buildReport(outing, card, current.settings.showDistance, log),
+        status: nextCardId ? 'home' : 'idle', cardId: nextCardId, homeSince: now,
+        homeDuration: randBetweenHours(6, 12), visitId: '', hostKey: ''
+      })
+    }
+    await userRef.update({ data: { outing: _.set(outing) } })
+    return current
+  })
+}
+
 async function tickAndGetRoomState(openid) {
   const now = Date.now()
-  let user = await ensureUser(openid)
+  const current = await ensureUser(openid)
   await expireHostVisits(openid, now)
-
-  const displayId = user.displayCardId
-  let displayCard = null
-  if (displayId) {
-    const c = await getCard(openid, displayId)
-    displayCard = c.card
-  }
-
-  const outing = user.outing || defaultOuting()
-  const settings = user.settings || defaultSettings()
-  let dirty = false
-
-  if (!displayCard || !settings.allowMyCatOut) {
-    if (outing.status === 'out' || outing.status === 'visiting') {
-      outing.status = 'idle'
-      outing.cardId = ''
-      dirty = true
-    }
-  } else {
-    if (outing.status === 'idle' || !outing.cardId || outing.cardId !== displayCard._id) {
-      if (outing.status === 'home' && outing.cardId !== displayCard._id) {
-        outing.homeSince = now
-        outing.homeDuration = randBetweenHours(6, 12)
-      }
-      if (outing.status === 'idle' || !outing.cardId) {
-        outing.status = 'home'
-        outing.homeSince = now
-        outing.homeDuration = randBetweenHours(6, 12)
-      }
-      outing.cardId = displayCard._id
-      dirty = true
-    }
-
-    if (outing.status === 'home' && now - outing.homeSince >= outing.homeDuration) {
-      outing.status = 'out'
-      outing.leftAt = now
-      outing.travelDuration = randBetweenHours(2, 6)
-      outing.pet = false
-      outing.fed = false
-      outing.visitId = ''
-      dirty = true
-    }
-
-    if (outing.status === 'out' && now - outing.leftAt >= outing.travelDuration) {
-      const picked = pickBehavior(outing.lastBehaviorIndex)
-      outing.behaviorIndex = picked.index
-      outing.behaviorText = picked.text
-      outing.lastBehaviorIndex = picked.index
-      outing.distanceKm = Math.round((0.5 + Math.random() * 7.5) * 10) / 10
-      outing.visitArriveAt = now
-      outing.visitDuration = randBetweenHours(2, 6)
-      outing.status = 'visiting'
-      const host = await pickVisitHost(openid)
-      const hostOpenId = host ? host._openid : `mock_${openid}`
-      const add = await db.collection('visits').add({
-        data: {
-          hostOpenId,
-          ownerOpenId: openid,
-          guestCardId: displayCard._id,
-          breed: displayCard.breed,
-          cutoutPath: displayCard.cutoutPath || displayCard.originalPath || '',
-          behaviorText: outing.behaviorText,
-          distanceKm: outing.distanceKm,
-          arriveAt: now,
-          leaveAt: now + outing.visitDuration,
-          status: 'active',
-          petByHost: false,
-          fedByHost: false,
-          seenLeft: false
-        }
-      })
-      outing.visitId = add._id
-      outing.hostKey = hostOpenId
-      dirty = true
-    }
-
-    if (outing.status === 'visiting' && now - outing.visitArriveAt >= outing.visitDuration) {
-      // 同步互动
-      if (outing.visitId) {
-        try {
-          const v = await db.collection('visits').doc(outing.visitId).get()
-          if (v.data) {
-            if (v.data.petByHost) outing.pet = true
-            if (v.data.fedByHost) outing.fed = true
-            if (v.data.status === 'active') {
-              await db.collection('visits').doc(outing.visitId).update({ data: { status: 'left' } })
-            }
-          }
-        } catch (e) {
-          /* ignore */
-        }
-      }
-      outing.unreadReport = buildReport(outing, displayCard.breed, settings.showDistance)
-      await db.collection('outingLogs').add({
-        data: {
-          // 云函数里 add 不会自动带 _openid，listOutingLogs 按它过滤，必须手动写
-          _openid: openid,
-          cardId: outing.cardId,
-          distanceKm: outing.distanceKm,
-          behaviorText: outing.behaviorText,
-          pet: !!outing.pet,
-          fed: !!outing.fed,
-          leftAt: outing.leftAt,
-          returnedAt: now
-        }
-      })
-      try {
-        await writeVisitLog(openid, {
-          direction: 'outbound',
-          cardId: outing.cardId || '',
-          breed: (displayCard && displayCard.breed) || '小猫',
-          name: (displayCard && displayCard.name) || '',
-          cutoutPath: (displayCard && (displayCard.cutoutPath || displayCard.cutoutFileId)) || '',
-          behaviorText: outing.behaviorText || '',
-          distanceKm: outing.distanceKm || 0,
-          pet: !!outing.pet,
-          fed: !!outing.fed,
-          leftAt: outing.leftAt,
-          leaveAt: now,
-          at: now
-        })
-      } catch (e) {
-        console.warn('write outbound visitLog fail', e)
-      }
-      outing.status = 'home'
-      outing.homeSince = now
-      outing.homeDuration = randBetweenHours(6, 12)
-      outing.visitId = ''
-      dirty = true
-    }
-  }
-
-  if (dirty) {
-    user.outing = outing
-    await saveUser(user)
-    user = await ensureUser(openid)
-  }
+  const user = await advanceOuting(openid, current, now)
+  const { card: displayCard } = await getCard(openid, user.displayCardId)
 
   // 放生池小猫有机会来串门
   try {
@@ -1387,6 +1412,7 @@ async function tickAndGetRoomState(openid) {
     visitor: activeVisitor
       ? {
           id: activeVisitor._id,
+          source: 'cloud',
           breed: activeVisitor.breed,
           cutoutPath: activeVisitor.cutoutPath,
           behaviorText: activeVisitor.behaviorText,
@@ -1409,53 +1435,54 @@ async function tickAndGetRoomState(openid) {
   }
 }
 
-async function interactVisitor(openid, { visitId, action }) {
+async function interactVisitor(openid, { visitId, interaction }) {
+  if (!visitId || (interaction !== 'pet' && interaction !== 'feed')) {
+    return { error: '无效的访客操作', code: 'BAD_REQUEST' }
+  }
   const user = await ensureUser(openid)
-  const res = await db.collection('visits').doc(visitId).get()
-  const visit = res.data
-  if (!visit || visit.hostOpenId !== openid || visit.status !== 'active') {
-    return { error: 'visitor gone', code: 'GONE' }
-  }
-  if (action === 'pet') {
-    if (!visit.petByHost) await db.collection('visits').doc(visitId).update({ data: { petByHost: true } })
-  } else if (action === 'feed') {
-    if (visit.fedByHost) return { toast: '' }
-    const day = todayKey()
-    if (user.fedDate === day) return { error: '今日已送过猫粮', code: 'FED_LIMIT' }
-    await db.collection('visits').doc(visitId).update({ data: { fedByHost: true } })
-    await db.collection('users').doc(user._id).update({ data: { fedDate: day } })
-  }
-  if (visit.ownerOpenId) {
-    const owners = await db.collection('users').where({ _openid: visit.ownerOpenId }).limit(1).get()
-    const owner = owners.data && owners.data[0]
-    if (owner && owner.outing && owner.outing.visitId === visitId) {
-      const outing = owner.outing
-      if (action === 'pet') outing.pet = true
-      if (action === 'feed') outing.fed = true
-      await db.collection('users').doc(owner._id).update({ data: { outing } })
+  return db.runTransaction(async (tx) => {
+    const visitRef = tx.collection('visits').doc(visitId)
+    const visit = await readDocument(visitRef)
+    if (!visit || visit.hostOpenId !== openid || visit.status !== 'active' || Date.now() >= visit.leaveAt) {
+      return { error: '小猫已经走了', code: 'GONE' }
     }
-  }
-  return { toast: action === 'pet' ? '你摸了摸它' : '你给了它一颗猫粮' }
+    if (interaction === 'pet') {
+      if (visit.petByHost) return { toast: '' }
+      await visitRef.update({ data: { petByHost: true } })
+      return { toast: '你摸了摸它' }
+    }
+    if (visit.fedByHost) return { toast: '' }
+    const userRef = tx.collection('users').doc(user._id)
+    const { data: current } = await userRef.get()
+    const day = todayKey()
+    if (current.fedDate === day) return { error: '今日已送过猫粮', code: 'FED_LIMIT' }
+    await visitRef.update({ data: { fedByHost: true } })
+    await userRef.update({ data: { fedDate: day } })
+    return { toast: '你给了它一颗猫粮' }
+  })
 }
 
 async function dismissReport(openid, { auto }) {
   const user = await ensureUser(openid)
-  const outing = user.outing || defaultOuting()
-  outing.unreadReport = null
-  if (auto) outing.lastAutoReportDay = todayKey()
-  await db.collection('users').doc(user._id).update({ data: { outing } })
+  const data = { 'outing.unreadReport': null }
+  if (auto) data['outing.lastAutoReportDay'] = todayKey()
+  await db.collection('users').doc(user._id).update({ data })
   return { ok: true }
 }
 
 async function dismissLeftTrace(openid, { visitId }) {
   if (!visitId) return { error: '缺少 visitId', code: 'BAD_REQUEST' }
   // 只能关闭自己小屋（host）的来访痕迹
-  const res = await db
-    .collection('visits')
-    .where({ _id: visitId, hostOpenId: openid })
-    .update({ data: { seenLeft: true } })
-  if (!res || !res.stats || !res.stats.updated) return { error: 'visit not found', code: 'NOT_FOUND' }
-  return { ok: true }
+  return db.runTransaction(async (tx) => {
+    const ref = tx.collection('visits').doc(visitId)
+    const visit = await readDocument(ref)
+    if (!visit || visit.hostOpenId !== openid || visit.status !== 'left') {
+      return { error: 'visit not found', code: 'NOT_FOUND' }
+    }
+    await finishVisit(tx, visit, Date.now())
+    await ref.update({ data: { seenLeft: true } })
+    return { ok: true }
+  })
 }
 
 async function listOutingLogs(openid, { cardId }) {
@@ -1480,6 +1507,10 @@ async function listOutingLogs(openid, { cardId }) {
 }
 
 async function listVisitLogs(openid, { direction } = {}) {
+  if (direction !== 'outbound') {
+    await expireHostVisits(openid, Date.now())
+    await backfillInboundVisitLogs(openid).catch((e) => console.warn('backfill inbound visit logs fail', e))
+  }
   const user = await ensureUser(openid)
   const showDistance = (user.settings || defaultSettings()).showDistance !== false
   let list = []
@@ -1538,6 +1569,8 @@ exports.main = async (event) => {
         return await recognize(event)
       case 'matting':
         return await runMatting(event, openid)
+      case 'embedCatPhoto':
+        return await embedCatPhoto(openid, event.imageBase64)
       case 'listCards':
         return await listCards(openid, event)
       case 'repairOrphanCards':

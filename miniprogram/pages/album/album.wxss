@@ -59,19 +59,6 @@
   color: var(--color-primary-ink);
 }
 
-.debug-btn {
-  position: fixed;
-  left: 300rpx;
-  z-index: 99;
-  padding: 8rpx 16rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-title);
-  color: var(--color-surface);
-  font-size: var(--font-2xs);
-  font-weight: 700;
-  opacity: 0.78;
-}
-
 /* ===== 主展示：贴在纸上的那只 ===== */
 .feature {
   margin-top: var(--space-4);
@@ -330,7 +317,8 @@
 .grid {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
+  justify-content: flex-start;
+  column-gap: 2.75%;
   margin-top: var(--space-2);
 }
 

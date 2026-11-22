@@ -3,7 +3,8 @@ const KEYS = {
   user: 'mxh_cache_user',
   privacy: 'mxh_privacy_agreed',
   longPressHint: 'mxh_longpress_hint_shown',
-  cardNames: 'mxh_card_names'
+  cardNames: 'mxh_card_names',
+  mapPrefs: 'mxh_map_prefs'
 }
 
 function set(key, value) {
@@ -88,6 +89,18 @@ function getCardName(cardId, fallback = '') {
   return fallback
 }
 
+/** 足迹地图：2D/3D 各自保存一份设置 */
+function getMapPrefs() {
+  const raw = get(KEYS.mapPrefs, null)
+  if (!raw || typeof raw !== 'object') return null
+  return raw
+}
+
+function setMapPrefs(prefs) {
+  if (!prefs || typeof prefs !== 'object') return
+  setSync(KEYS.mapPrefs, prefs)
+}
+
 module.exports = {
   KEYS,
   cacheCards,
@@ -100,5 +113,7 @@ module.exports = {
   setLongPressHintShown,
   getCardNames,
   setCardName,
-  getCardName
+  getCardName,
+  getMapPrefs,
+  setMapPrefs
 }

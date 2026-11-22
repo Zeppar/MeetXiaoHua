@@ -49,7 +49,6 @@
         </view>
 
         <view class="log-main">
-          <image wx:if="{{item.catImage}}" class="log-cat sticker tilt-l" src="{{item.catImage}}" mode="aspectFit" />
           <view class="log-body">
             <view class="h3 log-title">{{item.title}}</view>
             <view class="caption mt-1">{{item.summary}}</view>
@@ -60,11 +59,7 @@
           </view>
         </view>
 
-        <view wx:if="{{item.behaviorText}}" class="hand log-behavior">{{item.behaviorText}}</view>
-        <view wx:if="{{item.interactLine}}" class="log-interact">
-          <image class="log-paw" src="/assets/icons/paw.svg" />
-          <text>{{item.interactLine}}</text>
-        </view>
+        <outing-postcard postcard="{{item.postcard}}" />
       </view>
     </view>
   </view>

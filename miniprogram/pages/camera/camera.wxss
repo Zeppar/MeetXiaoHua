@@ -534,3 +534,38 @@
   color: var(--color-primary-ink);
   font-weight: 800;
 }
+
+.match-current,
+.match-card {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin: 16rpx 0;
+}
+
+.match-photo {
+  width: 100rpx;
+  height: 100rpx;
+  flex-shrink: 0;
+  background: #f7f0e5;
+  border-radius: 12rpx;
+}
+
+.match-info {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.match-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-button {
+  margin: 6rpx 0 0;
+  min-height: 0;
+  padding: 8rpx 14rpx;
+  font-size: 24rpx;
+}

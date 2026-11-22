@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "猫猫出门记录",
   "usingComponents": {
-    "empty-state": "/components/empty-state/empty-state"
+    "empty-state": "/components/empty-state/empty-state",
+    "outing-postcard": "/components/outing-postcard/outing-postcard"
   }
 }

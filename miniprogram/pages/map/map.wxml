@@ -1,28 +1,22 @@
 <view class="map-page">
-  <map
+  <map wx:if="{{mapMounted}}"
     class="map"
     id="footprintMap"
     longitude="{{longitude}}"
     latitude="{{latitude}}"
-    scale="{{mapSetting.scale}}"
-    markers="{{markers}}"
-    show-location="{{mapSetting.showLocation}}"
-    enable-scroll="{{mapSetting.enableScroll}}"
+    scale="{{mapScale}}"
+    min-scale="{{mapSetting.minScale}}"
+    max-scale="{{mapSetting.maxScale}}"
     enable-zoom="{{mapSetting.enableZoom}}"
-    enable-rotate="{{mapSetting.enableRotate}}"
-    enable-3D="{{mapSetting.enable3D}}"
-    enable-overlooking="{{mapSetting.enableOverlooking}}"
-    enable-satellite="{{mapSetting.enableSatellite}}"
-    enable-traffic="{{mapSetting.enableTraffic}}"
-    enable-poi="{{mapSetting.enablePoi}}"
-    enable-building="{{mapSetting.enableBuilding}}"
-    show-compass="{{mapSetting.showCompass}}"
-    show-scale="{{mapSetting.showScale}}"
-    rotate="{{mapSetting.rotate}}"
-    skew="{{mapSetting.skew}}"
+    setting="{{nativeMapSetting}}"
+    markers="{{markers}}"
     bindmarkertap="onMarkerTap"
     bindcallouttap="onCalloutTap"
     bindtap="onMapTap"
+    bindtouchstart="onMapTouchStart"
+    bindtouchmove="onMapTouchMove"
+    bindtouchend="onMapTouchEnd"
+    bindtouchcancel="onMapTouchCancel"
     bindregionchange="onRegionChange"
   />
 
@@ -49,12 +43,26 @@
     <view class="chip-dot"></view>
     <text>只有你能看见的相遇地点</text>
   </view>
-  <view wx:if="{{ready && footprintCount}}" class="chip count-chip" style="top: {{chipTop + 36}}px;">
+  <view wx:if="{{ready && footprintCount}}" class="chip count-chip" style="top: {{chipTop + 36}}px;"
+    hover-class="tap-press" catchtap="onShowAllFootprints" aria-role="button" aria-label="打开足迹列表">
     <image class="chip-ico" src="/assets/icons/paw.svg" />
-    <text>足迹 {{footprintCount}} 只{{albumCount > footprintCount ? ' · 图鉴 ' + albumCount + ' 只' : ''}}</text>
+    <text>{{simulatingFootprints ? '模拟足迹' : '足迹'}} {{footprintCount}} 只 · 查看列表</text>
+  </view>
+  <view
+    wx:if="{{ready && albumCount > footprintCount}}"
+    class="chip repair-chip"
+    style="top: {{chipTop + 72}}px;"
+    hover-class="tap-press"
+    bindtap="onRepairFootprints"
+  >
+    <text>还有 {{albumCount - footprintCount}} 只缺足迹，点此补齐</text>
   </view>
 
   <view class="side-tools">
+    <view wx:if="{{mapMounted}}" class="camera-readout">
+      <view class="camera-readout-row"><text>缩放级别</text><text class="camera-readout-value">{{cameraZoomText}}</text></view>
+      <view class="camera-readout-row"><text>倾角</text><text class="camera-readout-value">{{cameraTiltText}}</text></view>
+    </view>
     <view class="tool-btn" hover-class="tap-press" catchtap="onRecenter" aria-role="button" aria-label="回到定位">
       <view class="i-locate">
         <view class="i-locate-ring"></view>
@@ -76,7 +84,7 @@
     <view class="btn-primary btn-sm empty-tip-cta" hover-class="tap-press" bindtap="onGoShoot">{{goShoot}}</view>
   </view>
 
-  <!-- ========== 聚合点：多只猫列表 ========== -->
+  <!-- ========== 足迹列表 ========== -->
   <view
     wx:if="{{clusterSheet && !showSettings && !detailCard}}"
     class="mask mask-bottom cluster-mask"
@@ -89,8 +97,8 @@
         <view class="h3">{{clusterSheet.title}}</view>
         <view class="sheet-link" hover-class="tap-press" catchtap="onCloseClusterSheet">关闭</view>
       </view>
-      <view class="muted cluster-sub">相邻足迹合并在一起，点开可切换查看</view>
-      <scroll-view scroll-y class="cluster-scroll" enhanced show-scrollbar="{{false}}">
+      <view wx:if="{{clusterSheet.subtitle}}" class="muted cluster-sub">{{clusterSheet.subtitle}}</view>
+      <scroll-view scroll-y class="cluster-scroll" style="{{clusterSheet.allFootprints && clusterSheet.items.length > 3 ? 'height: 48vh;' : ''}}" enhanced show-scrollbar="{{false}}">
         <view class="list cluster-list">
           <view
             wx:for="{{clusterSheet.items}}"
@@ -226,7 +234,7 @@
             </view>
           </view>
 
-          <view wx:if="{{detailCard.geoLabel}}" class="tag tag-sky detail-geo">位置已记录 · {{detailCard.geoLabel}}</view>
+          <view wx:if="{{detailCard.geoLabel}}" class="tag tag-sky detail-geo">{{detailCard.simulatedGeo ? '模拟位置' : '位置已记录'}} · {{detailCard.geoLabel}}</view>
           <view wx:if="{{detailCard.note}}" class="note detail-note">{{detailCard.note}}</view>
           <view wx:elif="{{detailCard.mattingFailed}}" class="muted detail-note-plain">抠图不完整，相遇记录仍保留</view>
 
@@ -250,7 +258,8 @@
         <view class="h3">地图设置</view>
         <view class="sheet-link" hover-class="tap-press" bindtap="onResetSettings">恢复默认</view>
       </view>
-      <view class="muted sheet-note">只调地图表现；个性化底图配色需付费开通</view>
+      <view class="muted sheet-note">放大时逐渐倾斜，拉远后回到垂直俯视</view>
+      <view wx:if="{{settingsDirty}}" class="muted sheet-note">有未保存修改</view>
 
       <scroll-view scroll-y class="sheet-scroll" enhanced show-scrollbar="{{false}}">
         <block wx:for="{{settingGroups}}" wx:key="id">
@@ -282,9 +291,11 @@
                 <view class="range-btns">
                   <view class="range-btn" hover-class="tap-press" data-key="{{opt.key}}" data-dir="-1" data-step="{{opt.step}}" bindtap="onNudgeSetting">−</view>
                   <slider
+                    wx:if="{{sliderSeed > 0}}"
                     class="range-slider"
                     min="{{opt.min}}"
                     max="{{opt.max}}"
+                    disabled="{{!!opt.disabled}}"
                     step="{{opt.step}}"
                     value="{{mapSetting[opt.key]}}"
                     activeColor="#7cc6a4"
@@ -302,6 +313,15 @@
         </block>
         <view class="sheet-foot-space"></view>
       </scroll-view>
+
+      <view class="settings-save-bar">
+        <view wx:if="{{simulatingFootprints}}" class="btn-secondary btn-block" hover-class="tap-press" bindtap="onRestoreFootprints">
+          恢复原始足迹
+        </view>
+        <view class="btn-primary btn-block settings-save-btn {{simulatingFootprints ? 'mt-2' : ''}}" hover-class="tap-press" bindtap="onSaveSettings">
+          保存地图设置
+        </view>
+      </view>
     </view>
   </view>
 

@@ -4,6 +4,7 @@
  */
 const local = require('./local-store')
 const cache = require('./storage-cache')
+const { appendIdentity } = require('../utils/photo-identity')
 const { isEphemeralPath, persistLocalImage, sanitizeCardMedia } = require('../utils/card-media')
 const {
   blurCoordinate,
@@ -63,7 +64,7 @@ async function dualWrite({ action, localWrite, cloudPayload, afterCloud }) {
   if (!useCloud) return localRes
   try {
     const payload =
-      typeof cloudPayload === 'function' ? cloudPayload(localRes) || {} : cloudPayload || {}
+      typeof cloudPayload === 'function' ? (await cloudPayload(localRes)) || {} : cloudPayload || {}
     const cloudRes = await callCloud(action, payload)
     if (typeof afterCloud === 'function') {
       const merged = await afterCloud(cloudRes, localRes)
@@ -339,6 +340,10 @@ function mergeCardLists(cloudCards, localCards) {
         : c.confidence != null
           ? c.confidence
           : localCard.confidence || 0,
+      photoIdentities: (localCard.photoIdentities || []).reduce(
+        (refs, identity) => appendIdentity(refs, identity),
+        c.photoIdentities || []
+      ),
       geo: pickGeo(c.geo, localCard.geo)
     }
   })
@@ -354,6 +359,8 @@ function mergeCardLists(cloudCards, localCards) {
 let _repairTried = false
 
 async function listCards(payload = {}) {
+  const breed = payload && payload.breed
+  const filterByBreed = breed && breed !== '全部'
   try {
     // 本地与云并行，避免「先本地再干等云函数」
     const localPromise = local.listCards(payload)
@@ -396,15 +403,14 @@ async function listCards(payload = {}) {
       cloudCards == null
         ? localRes.cards || []
         : mergeCardLists(cloudCards, localRes.cards || [])
-    const breed = payload && payload.breed
     const filtered = (
-      breed && breed !== '全部' ? cards.filter((c) => c.breed === breed) : cards
+      filterByBreed ? cards.filter((c) => c.breed === breed) : cards
     ).map(sanitizeCardMedia)
-    cache.cacheCards(filtered)
+    if (!filterByBreed) cache.cacheCards(filtered)
     return { cards: filtered, fromCache: false }
   } catch (e) {
-    const cards = cache.getCachedCards()
-    return { cards, fromCache: true }
+    const cards = cache.getCachedCards() || []
+    return { cards: filterByBreed ? cards.filter((c) => c.breed === breed) : cards, fromCache: true }
   }
 }
 
@@ -609,13 +615,27 @@ async function ensureLocalCard(cardId) {
   return null
 }
 
-async function updateCard(cardId, patch) {
+async function updateCard(cardId, patch, { requireCloudWrite = false } = {}) {
   // 云端合并出来的卡可能不在本地：先镜像再改
   await ensureLocalCard(cardId)
   // 禁止客户端直接改品种，统一走 requestBreedChange
   const safePatch = { ...(patch || {}) }
   if (safePatch.breed !== undefined && !safePatch._breedReviewApply) {
     delete safePatch.breed
+  }
+
+  if (requireCloudWrite) {
+    if (!useCloud) return local.updateCard(cardId, safePatch)
+    const cloudRes = await callCloud('updateCard', { cardId, patch: safePatch })
+    if (!cloudRes.card) throw new Error('云端未返回更新后的猫卡')
+    const { card } = cloudRes
+    try {
+      const localRes = await local.getCard(cardId)
+      await local.mirrorCloudCard(card, (localRes && localRes.card) || {})
+    } catch (err) {
+      console.warn('[api] updateCard local mirror fail', err)
+    }
+    return cloudRes
   }
 
   let localRes = null
@@ -859,13 +879,36 @@ async function listMemories(cardId) {
   }
 }
 
+let embeddingUnavailable = false
+
+function canEmbedCatPhoto() {
+  return useCloud && !embeddingUnavailable
+}
+
+async function embedCatPhoto(imageBase64) {
+  if (!canEmbedCatPhoto() || !imageBase64) return ''
+  try {
+    const result = await callCloud('embedCatPhoto', { imageBase64 })
+    if (result.code === 'DISABLED') embeddingUnavailable = true
+    return result.embedding || ''
+  } catch (e) {
+    if (e && e.code === 'BAD_ACTION') embeddingUnavailable = true
+    return ''
+  }
+}
+
 async function createMemory(payload) {
-  // 云端列表出来的卡可能还没落本地，本地 createMemory 会报 card not found
   await ensureLocalCard(payload && payload.cardId)
+  const imagePath = await persistLocalImage(payload.imagePath)
+  const input = { ...payload, imagePath }
   return dualWrite({
     action: 'createMemory',
-    localWrite: () => local.createMemory(payload),
-    cloudPayload: payload || {},
+    localWrite: () => local.createMemory(input),
+    cloudPayload: async () => ({
+      ...input,
+      imagePath: '',
+      imageFileId: await uploadLocalImageToCloud(imagePath, 'memories/photos')
+    }),
     afterCloud: async (cloudRes, localRes) => {
       const localId = localRes && localRes.memory && localRes.memory._id
       if (cloudRes && cloudRes.memory && localId) {
@@ -925,19 +968,55 @@ async function breedFilters(cardsMaybe) {
   }
 }
 
+let lastCloudRoom = null
+
+async function getCloudRoomState() {
+  try {
+    const room = await callCloud('getRoomState', {})
+    lastCloudRoom = room
+    return room
+  } catch (err) {
+    console.warn('[api] cloud getRoomState fail', err)
+  }
+
+  try {
+    const { user } = await callCloud('getProfile', {})
+    if (user) {
+      const outing = user.outing || {}
+      const away = outing.status === 'out' || outing.status === 'visiting'
+      return {
+        user,
+        myCatStatus: away ? 'away' : user.displayCardId ? 'home' : 'none',
+        outingPhase: away ? outing.status : user.displayCardId ? 'home' : 'none',
+        outingCardId: away ? outing.cardId || user.displayCardId || '' : '',
+        outingCatName: '',
+        visitor: null,
+        leftTrace: null,
+        unreadBadge: outing.unreadReport ? 1 : 0,
+        unreadReport: outing.unreadReport || null,
+        autoShowReport: false
+      }
+    }
+  } catch (err) {
+    console.warn('[api] cloud room profile fail', err)
+  }
+  return lastCloudRoom
+}
+
 async function getRoomState() {
-  // 本地护理/家具与云出门状态并行，避免二次 getRoomState
-  const localPromise = local.getRoomState()
-  const cloudPromise = useCloud
-    ? callCloud('getRoomState', {}).catch((e) => {
-        console.warn('[api] cloud getRoomState fail', e)
-        return null
-      })
-    : Promise.resolve(null)
+  const [localRoom, cloudRes] = await Promise.all([
+    local.getRoomState({ cloudMode: useCloud }),
+    useCloud ? getCloudRoomState() : null
+  ])
+  const localTrip = localRoom.outingCardId.startsWith('card_') && !(cloudRes && cloudRes.outingCardId)
+  const localOuting = localTrip ? {
+    myCatStatus: localRoom.myCatStatus,
+    outingPhase: localRoom.outingPhase,
+    outingCardId: localRoom.outingCardId,
+    outingCatName: localRoom.outingCatName
+  } : {}
 
-  const [localRoom, cloudRes] = await Promise.all([localPromise, cloudPromise])
-
-  // 云端可覆盖出门/访客；展示猫优先保留本地，避免云端空 displayCardId 把小屋刷空
+  // 云模式下出门和访客都以云端状态为准。
   let res = cloudRes
     ? {
         ...localRoom,
@@ -949,26 +1028,36 @@ async function getRoomState() {
             (cloudRes.user && cloudRes.user.displayCardId) ||
             (localRoom.user && localRoom.user.displayCardId) ||
             '',
-          roomMateIds:
-            (cloudRes.user &&
-              Array.isArray(cloudRes.user.roomMateIds) &&
-              cloudRes.user.roomMateIds.length &&
-              cloudRes.user.roomMateIds) ||
-            (localRoom.user && localRoom.user.roomMateIds) ||
-            []
+          roomMateIds: [
+            ...((cloudRes.user && cloudRes.user.roomMateIds) || []),
+            ...((localRoom.user && localRoom.user.roomMateIds) || []).filter((id) => id.startsWith('card_'))
+          ]
         },
         displayCard: cloudRes.displayCard || localRoom.displayCard || null,
         care: localRoom.care,
         careBars: localRoom.careBars,
         furniture: localRoom.furniture,
-        outingPhase: cloudRes.outingPhase || localRoom.outingPhase,
-        outingCardId: cloudRes.outingCardId || localRoom.outingCardId || '',
-        outingCatName: cloudRes.outingCatName || localRoom.outingCatName || ''
+        ...localOuting
       }
-    : localRoom
+    : useCloud
+      ? {
+          ...localRoom,
+          myCatStatus: localRoom.displayCard ? 'home' : 'none',
+          outingPhase: localRoom.displayCard ? 'home' : 'none',
+          outingCardId: '',
+          outingCatName: '',
+          visitor: null,
+          leftTrace: null,
+          unreadBadge: 0,
+          unreadReport: null,
+          autoShowReport: false,
+          ...localOuting
+        }
+      : localRoom
 
   const displayId = res && res.user && res.user.displayCardId
-  if (displayId && !(res && res.displayCard)) {
+  if (displayId && res.displayCard && res.displayCard._id !== displayId) res.displayCard = null
+  if (displayId && !res.displayCard) {
     try {
       const localCard = await local.getCard(displayId)
       if (localCard && localCard.card) {
@@ -996,7 +1085,12 @@ async function getRoomState() {
 
 async function careCat(payload) {
   // 护理状态优先本地，保证离线衰减与互动即时；亲密度同步云端
-  const res = await local.careCat(payload || {})
+  if (payload && payload.cardId && lastCloudRoom && lastCloudRoom.outingCardId === payload.cardId) {
+    const err = new Error('它还在外面呢')
+    err.code = 'CAT_AWAY'
+    throw err
+  }
+  const res = await local.careCat({ ...(payload || {}), useCloudOuting: useCloud })
   if (res && res.user) {
     cache.cacheUser(res.user)
     syncRoomProfile(res.user)
@@ -1015,15 +1109,10 @@ async function saveRoomFurniture(payload) {
   return local.saveRoomFurniture(payload || {})
 }
 
-async function interactVisitor(payload) {
-  // 串门互动优先本地即时反馈；云端后台同步，避免云卡住导致小屋假死
-  const localRes = await local.interactVisitor(payload || {})
-  if (useCloud) {
-    callCloud('interactVisitor', payload || {}).catch((e) => {
-      console.warn('[api] cloud interactVisitor fail, keep local', e)
-    })
-  }
-  return localRes
+async function interactVisitor({ visitId, action, source } = {}) {
+  return useCloud && source !== 'local'
+    ? callCloud('interactVisitor', { visitId, interaction: action })
+    : local.interactVisitor({ visitId, action })
 }
 
 async function dismissReport(payload = {}) {
@@ -1095,11 +1184,21 @@ async function debugAdvanceOuting() {
 
 async function releaseCard(cardId) {
   if (!cardId) throw new Error('缺少猫卡')
-  const res = await dualWrite({
-    action: 'releaseCard',
-    localWrite: () => local.releaseCard(cardId),
-    cloudPayload: { cardId }
-  })
+  let res
+  if (useCloud && !String(cardId).startsWith('card_')) {
+    res = await callCloud('releaseCard', { cardId })
+    if (!res.released) throw new Error('放生失败，请确认云函数已更新')
+    try {
+      lastCloudRoom = null
+      const localRes = await local.releaseCard(cardId, res.released, res.room)
+      cache.cacheUser(localRes.user)
+    } catch (e) {
+      console.warn('[api] mirror released card fail', e)
+    }
+  } else {
+    res = await local.releaseCard(cardId)
+    if (res.user) cache.cacheUser(res.user)
+  }
   await refreshCardCache()
   return res
 }
@@ -1138,22 +1237,20 @@ async function listMyReleased() {
   }
 }
 
-async function adoptVisitor(payload) {
-  const res = await dualWrite({
-    action: 'adoptVisitor',
-    localWrite: () => local.adoptVisitor(payload || {}),
-    cloudPayload: payload || {},
-    afterCloud: async (cloudRes, localRes) => {
-      if (cloudRes && cloudRes.card) {
-        await local.mirrorCloudCard(cloudRes.card, {
-          cutoutPath: cloudRes.card.cutoutPath || '',
-          originalPath: cloudRes.card.originalPath || ''
-        })
-        return { ...localRes, ...cloudRes }
-      }
-      return localRes
+async function adoptVisitor({ visitId, geo, placeText, source } = {}) {
+  const payload = { visitId, geo, placeText }
+  const useCloudVisit = useCloud && source !== 'local'
+  const res = useCloudVisit
+    ? await callCloud('adoptVisitor', payload)
+    : await local.adoptVisitor(payload)
+  if (useCloudVisit && res.card) {
+    lastCloudRoom = null
+    try {
+      await local.mirrorCloudCard(res.card)
+    } catch (e) {
+      console.warn('[api] mirror adopted card fail', e)
     }
-  })
+  }
   await refreshCardCache()
   return res
 }
@@ -1162,7 +1259,7 @@ async function adoptVisitor(payload) {
  * 给缺坐标的旧卡补定位，并把叠在同一模糊点上的多只猫散开。
  * 返回整理后的卡片（含规范化 geo），供足迹页直接使用，避免再被云端旧坐标盖掉。
  */
-async function backfillMissingCardGeo() {
+async function backfillMissingCardGeo(options = {}) {
   const { cards } = await listCards({})
   const real = (cards || [])
     .filter((c) => c && c._id && String(c._id).indexOf('debug_') !== 0)
@@ -1176,7 +1273,14 @@ async function backfillMissingCardGeo() {
   let needAuth = false
 
   if (missing.length) {
-    const loc = await getCurrentPosition()
+    // 足迹页可传入已拿到的定位，避免二次 getLocation 失败导致补不齐
+    const hinted = options.baseLoc || null
+    const loc =
+      hinted &&
+      Number.isFinite(Number(hinted.latitude)) &&
+      Number.isFinite(Number(hinted.longitude))
+        ? { latitude: Number(hinted.latitude), longitude: Number(hinted.longitude) }
+        : await getCurrentPosition()
     const withGeoNow = real.filter((c) => c.geo)
     let base = null
     if (loc) {
@@ -1292,9 +1396,12 @@ module.exports = {
   backfillMissingCardGeo,
   listMemories,
   createMemory,
+  canEmbedCatPhoto,
+  embedCatPhoto,
   deleteMemory,
   reportDuelResult,
   breedFilters,
+  filtersFromCards,
   getRoomState,
   careCat,
   saveRoomFurniture,

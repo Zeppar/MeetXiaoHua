@@ -130,7 +130,8 @@
 /* ================= 顶部小胶囊 ================= */
 
 .privacy-chip,
-.count-chip {
+.count-chip,
+.repair-chip {
   position: absolute;
   left: var(--space-3);
   z-index: 10;
@@ -148,6 +149,14 @@
 .count-chip {
   color: var(--color-title);
   font-weight: 700;
+}
+
+.repair-chip {
+  color: #102418;
+  font-weight: 700;
+  background: linear-gradient(180deg, #5aef9a 0%, #2fd074 100%);
+  border-color: rgba(255, 255, 255, 0.55);
+  max-width: 72%;
 }
 
 .chip-dot {
@@ -169,9 +178,41 @@
   right: var(--space-3);
   bottom: calc(300rpx + env(safe-area-inset-bottom));
   z-index: 11;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 16rpx;
+  pointer-events: none;
+}
+
+.camera-readout {
+  box-sizing: border-box;
+  width: 190rpx;
+  padding: 10rpx 14rpx;
+  border: 2rpx solid var(--color-line);
+  border-radius: 18rpx;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  color: var(--color-text-2);
+  font-size: var(--font-xs);
+  line-height: 1.55;
+}
+
+.camera-readout-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8rpx;
+}
+
+.camera-readout-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--color-title);
 }
 
 .tool-btn {
+  pointer-events: auto;
   width: 80rpx;
   height: 80rpx;
   border-radius: 22rpx;
@@ -587,7 +628,7 @@
 }
 
 .settings-sheet {
-  max-height: 76vh;
+  max-height: 82vh;
   display: flex;
   flex-direction: column;
 }
@@ -598,8 +639,16 @@
 
 .sheet-scroll {
   flex: 1;
-  max-height: 58vh;
+  max-height: 48vh;
   margin-top: var(--space-2);
+}
+
+.settings-save-bar {
+  padding: 12rpx 0 calc(12rpx + env(safe-area-inset-bottom));
+}
+
+.settings-save-btn {
+  text-align: center;
 }
 
 .group-title {

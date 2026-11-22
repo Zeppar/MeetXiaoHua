@@ -1,6 +1,7 @@
 <view class="page page-sub camera">
   <!-- 离屏抠图兜底画布（不展示） -->
   <canvas type="2d" id="mattingCanvas" class="matting-canvas"></canvas>
+  <canvas type="2d" id="identityCanvas" class="matting-canvas"></canvas>
 
   <!-- ========== 准备拍照 ========== -->
   <block wx:if="{{state === 'ready'}}">
@@ -118,7 +119,7 @@
 
       <view class="preview-actions">
         <button class="btn-secondary" bindtap="onRetake">{{retakeText}}</button>
-        <button class="btn-primary" bindtap="onSaveStart">{{saveText}}</button>
+        <button class="btn-primary" loading="{{checkingMatches}}" disabled="{{checkingMatches || saving}}" bindtap="onSaveStart">{{checkingMatches ? '正在查找旧猫卡' : saveText}}</button>
       </view>
     </view>
   </block>
@@ -143,6 +144,27 @@
       </view>
     </view>
   </block>
+
+  <view wx:if="{{catMatches.length}}" class="mask" catchtouchmove="noop">
+    <view class="dialog">
+      <view class="dialog-title">它在图鉴里吗？</view>
+      <view class="match-current">
+        <image class="match-photo" src="{{result.originalPath || tempPath}}" mode="aspectFit" />
+        <text>这次的照片</text>
+      </view>
+      <view wx:for="{{catMatches}}" wx:key="id" class="match-card">
+        <image class="match-photo" src="{{item.image || '/assets/art/cat-sit.svg'}}" mode="aspectFit" />
+        <view class="match-info">
+          <view class="match-name">{{item.name}}</view>
+          <button class="btn-secondary match-button" data-id="{{item.id}}" bindtap="onSaveCatMemory" disabled="{{saving}}">存入这只猫的记忆</button>
+        </view>
+      </view>
+      <view class="dialog-actions">
+        <button class="btn-ghost" bindtap="onCloseCatMatches" disabled="{{saving}}">取消</button>
+        <button class="btn-primary" bindtap="onAddNewCat" disabled="{{saving}}">添加新猫</button>
+      </view>
+    </view>
+  </view>
 
   <!-- ========== 授权弹窗 ========== -->
   <view wx:if="{{showCameraAuth}}" class="mask auth-mask" catchtouchmove="noop">

@@ -1,13 +1,51 @@
 const api = require('../../services/api')
+const cache = require('../../services/storage-cache')
 const copy = require('../../constants/copy')
 const { formatDateTime, cardDisplayName, formatDateShort } = require('../../utils/format')
 const { pickCardImage } = require('../../utils/card-media')
-const { normalizeGeo } = require('../../utils/geo-blur')
+const { getCurrentPosition, normalizeGeo, spreadFootprints } = require('../../utils/geo-blur')
 const nav = require('../../utils/navigate')
 const pageLoad = require('../../utils/page-load')
 
-const DEFAULT_CENTER = { latitude: 31.2304, longitude: 121.4737 }
+/** 定位失败时使用青岛市南区百盛商业大厦作为地图中心。 */
+const DEFAULT_CENTER = { latitude: 36.0669, longitude: 120.3185 }
 const EMPTY_SCALE = 13
+const MIN_MAP_SCALE = 3
+const MAX_MAP_SCALE = 20
+const ZOOM_KEYS = ['scale', 'minScale', 'maxScale']
+const TILT_START_SCALE = 16
+const TILT_END_SCALE = 19
+const PINCH_TILT_FRAME_MS = 40
+const PINCH_SETTLE_MS = 160
+const SCALE_SAMPLE_MS = 110
+const SCALE_SAMPLE_TAIL_MS = 380
+const SCALE_SAMPLE_LIMIT_MS = 8000
+const CAMERA_READ_TIMEOUT_MS = 500
+
+function tiltAtScale(scale, maxTilt) {
+  const progress = Math.max(0, Math.min(1, (scale - TILT_START_SCALE) / (TILT_END_SCALE - TILT_START_SCALE)))
+  // 进出倾角区间时缓一点，避免接近端点时突然抬头。
+  return Math.round(maxTilt * progress * progress * (3 - 2 * progress))
+}
+
+function pinchSpan(touches) {
+  if (!touches || touches.length !== 2) return 0
+  const [a, b] = touches
+  const dx = (a.clientX ?? a.pageX) - (b.clientX ?? b.pageX)
+  const dy = (a.clientY ?? a.pageY) - (b.clientY ?? b.pageY)
+  return Math.hypot(dx, dy) || 0
+}
+
+function clampZoom(scale, setting) {
+  return Math.max(setting.minScale, Math.min(setting.maxScale, scale))
+}
+
+function nativeMapSetting(setting, scale) {
+  const { showMarkers, showWash, showVeil, enableZoom, minScale, maxScale, scale: initialScale, ...native } = setting
+  const skew = tiltAtScale(scale, setting.skew)
+  return { ...native, skew, enable3D: setting.enable3D && skew > 0, enableOverlooking: setting.skew > 0 }
+}
+
 const CAT_ICONS = [
   '/assets/illus/map-cat-1.png',
   '/assets/illus/map-cat-2.png',
@@ -16,7 +54,7 @@ const CAT_ICONS = [
 /** 聚合簇用同一只猫标 + 数量角标 */
 const CLUSTER_ICON = CAT_ICONS[0]
 
-function createDefaultSetting() {
+function createBaseSetting() {
   return {
     showLocation: true,
     enableSatellite: false,
@@ -31,12 +69,44 @@ function createDefaultSetting() {
     enableScroll: true,
     enableZoom: true,
     enableRotate: false,
-    enable3D: false,
-    enableOverlooking: false,
+    enable3D: true,
     scale: EMPTY_SCALE,
+    minScale: MIN_MAP_SCALE,
+    maxScale: MAX_MAP_SCALE,
     rotate: 0,
-    skew: 0
+    skew: 32
   }
+}
+
+function sanitizeSetting(raw) {
+  const base = createBaseSetting()
+  if (!raw || typeof raw !== 'object') return base
+  const next = { ...base }
+  Object.keys(base).forEach((key) => {
+    if (raw[key] === undefined) return
+    if (typeof base[key] === 'boolean') next[key] = !!raw[key]
+    else if (typeof base[key] === 'number') {
+      const n = Number(raw[key])
+      const isZoom = ZOOM_KEYS.includes(key)
+      const [min, max] = isZoom ? [MIN_MAP_SCALE, MAX_MAP_SCALE] : key === 'rotate' ? [0, 360] : [0, 40]
+      const value = raw[key] != null && raw[key] !== '' && Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : base[key]
+      next[key] = isZoom ? Math.round(value) : value
+    } else next[key] = raw[key]
+  })
+  next.minScale = Math.min(next.minScale, MAX_MAP_SCALE - 1)
+  next.maxScale = Math.max(next.maxScale, next.minScale + 1)
+  next.scale = clampZoom(next.scale, next)
+  return next
+}
+
+function loadMapSetting() {
+  const saved = cache.getMapPrefs() || {}
+  if (saved.autoView) return sanitizeSetting(saved.autoView)
+  const modes = saved.modes || {}
+  const flat = modes["2d"] || {}
+  const tilted = modes["3d"] || {}
+  // 保留原来进入地图的设置和近景最大倾角。
+  return sanitizeSetting({ ...flat, skew: tilted.skew, enable3D: tilted.enable3D, enableBuilding: tilted.enableBuilding ?? flat.enableBuilding })
 }
 
 const SETTING_GROUPS = [
@@ -63,20 +133,41 @@ const SETTING_GROUPS = [
       { type: 'toggle', key: 'enableScroll', name: '允许拖动', desc: '手指拖动平移地图' },
       { type: 'toggle', key: 'enableZoom', name: '允许缩放', desc: '双指捏合缩放' },
       { type: 'toggle', key: 'enableRotate', name: '允许旋转', desc: '双指旋转地图朝向' },
-      { type: 'toggle', key: 'enable3D', name: '3D 楼块', desc: '开启三维建筑（需配合俯视）' },
-      { type: 'toggle', key: 'enableOverlooking', name: '允许俯视', desc: '双指调节俯仰角' }
+      { type: 'toggle', key: 'enable3D', name: '3D 楼块', desc: '地图倾斜后显示立体楼块' }
     ]
   },
   {
     id: 'camera',
     title: '视角数值',
     options: [
-      { type: 'range', key: 'scale', name: '缩放级别', desc: '3 最远 · 20 最近', min: 3, max: 20, step: 1 },
+      { type: 'range', key: 'minScale', name: '最小缩放级别', desc: '拉远地图时的下限', min: MIN_MAP_SCALE, max: MAX_MAP_SCALE - 1, step: 1 },
+      { type: 'range', key: 'maxScale', name: '最大缩放级别', desc: '放大地图时的上限', min: MIN_MAP_SCALE + 1, max: MAX_MAP_SCALE, step: 1 },
+      { type: 'range', key: 'scale', name: '初始缩放', desc: '进入地图时的缩放级别', min: MIN_MAP_SCALE, max: MAX_MAP_SCALE, step: 1 },
       { type: 'range', key: 'rotate', name: '旋转角度', desc: '0~360，相对正北', min: 0, max: 360, step: 5 },
-      { type: 'range', key: 'skew', name: '俯仰角', desc: '0 平视 · 40 最大俯视', min: 0, max: 40, step: 1 }
+      { type: 'range', key: 'skew', name: '最大倾角', desc: '放大到 19 级时达到此角度，0 始终垂直俯视', min: 0, max: 40, step: 1 }
     ]
   }
 ]
+
+function settingGroupsFor(setting) {
+  const zoomBounds = {
+    minScale: { max: setting.maxScale - 1 },
+    maxScale: { min: setting.minScale + 1 },
+    scale: { min: setting.minScale, max: setting.maxScale }
+  }
+  return SETTING_GROUPS.map((group) => {
+    if (group.id !== 'camera') return group
+    const options = group.options.map((option) => {
+      const bounds = zoomBounds[option.key]
+      if (!bounds) return option
+      const range = { ...option, ...bounds }
+      // 原生 slider 需要不同的端点。只有一个合法值时保留基础范围并禁用。
+      if (range.min === range.max) return { ...option, disabled: true }
+      return range
+    })
+    return { ...group, options }
+  })
+}
 
 Page({
   data: {
@@ -84,9 +175,16 @@ Page({
     longitude: DEFAULT_CENTER.longitude,
     /** 原生聚合用 addMarkers，组件 markers 保持空 */
     markers: [],
-    mapSetting: createDefaultSetting(),
-    settingGroups: SETTING_GROUPS,
+    mapSetting: createBaseSetting(),
+    mapScale: EMPTY_SCALE,
+    nativeMapSetting: nativeMapSetting(createBaseSetting(), EMPTY_SCALE),
+    cameraZoomText: '—',
+    cameraTiltText: '—',
+    mapMounted: false,
+    settingGroups: settingGroupsFor(createBaseSetting()),
     showSettings: false,
+    settingsDirty: false,
+    sliderSeed: 1,
     bubble: null,
     /** 聚合点内可左右切换的多只猫 */
     bubbleGroup: null,
@@ -97,6 +195,7 @@ Page({
     goShoot: copy.buttons.goShoot,
     footprintCount: 0,
     albumCount: 0,
+    simulatingFootprints: false,
     pageLoading: false,
     loadingText: copy.tips.pageLoading,
     ready: false,
@@ -110,13 +209,29 @@ Page({
   _markerIdToCard: {},
   _ignoreMapTapUntil: 0,
   _centerAnimTimer: null,
-  _regionTimer: null,
   _mapCtx: null,
   _clusterReady: false,
+  _clusterInitializing: false,
   _clusterListening: false,
+  _clusterMarkerIds: [],
+  _clusterMarkerSequence: 0,
+  _clusterRenderSequence: 0,
   _pendingMarkerSync: false,
+  _viewScale: EMPTY_SCALE,
+  _scaleReadSequence: 0,
+  _scaleSampleTimer: null,
+  _scaleSampleUntil: 0,
+  _samplingSkew: false,
+  _pinch: null,
+  _pinchTiltTimer: null,
+  _pinchSettleTimer: null,
+  _appliedTilt: 0,
 
   onLoad() {
+    const enterSetting = loadMapSetting()
+    this._viewScale = enterSetting.scale
+    const nativeSetting = nativeMapSetting(enterSetting, this._viewScale)
+    this._appliedTilt = nativeSetting.skew
     try {
       const win = (wx.getWindowInfo && wx.getWindowInfo()) || {}
       const menu = wx.getMenuButtonBoundingClientRect()
@@ -124,21 +239,41 @@ Page({
       const navHeight = menu.height || 32
       const navBarHeight = (menu.bottom || statusBar + navHeight) + 8
       const chipTop = navBarHeight + 8
-      this.setData({ statusBar, navHeight, navBarHeight, chipTop })
+      this.setData({
+        statusBar,
+        navHeight,
+        navBarHeight,
+        chipTop,
+        mapMounted: true,
+        mapSetting: enterSetting,
+        settingGroups: settingGroupsFor(enterSetting),
+        mapScale: enterSetting.scale,
+        nativeMapSetting: nativeSetting,
+        settingsDirty: false
+      })
     } catch (e) {
-      /* keep defaults */
+      this.setData({
+        mapMounted: true,
+        mapSetting: enterSetting,
+        settingGroups: settingGroupsFor(enterSetting),
+        mapScale: enterSetting.scale,
+        nativeMapSetting: nativeSetting,
+        settingsDirty: false
+      })
     }
   },
 
   onReady() {
     this._mapCtx = wx.createMapContext('footprintMap', this)
     this._setupNativeCluster()
+    this._refreshZoomTilt()
   },
 
   onUnload() {
     this.__mxhUnloaded = true
+    this._clearPinchTracking()
+    this._stopScaleSampling()
     this._stopCenterAnim()
-    if (this._regionTimer) clearTimeout(this._regionTimer)
   },
 
   _setupNativeCluster() {
@@ -152,21 +287,26 @@ Page({
 
     if (!this._clusterListening && typeof ctx.on === 'function') {
       this._clusterListening = true
-      ctx.on('markerClusterCreate', (res) => this._onNativeClusterCreate(res))
-      ctx.on('markerClusterClick', (res) => this._onNativeClusterClick(res))
+      ctx.on('markerClusterCreate', (res) => {
+        if (this._mapCtx === ctx) this._onNativeClusterCreate(res)
+      })
+      ctx.on('markerClusterClick', (res) => {
+        if (!this.__mxhUnloaded && this._mapCtx === ctx) this._onNativeClusterClick(res)
+      })
     }
 
+    this._clusterInitializing = true
     ctx.initMarkerCluster({
       enableDefaultStyle: false,
       zoomOnClick: false,
       gridSize: 72,
-      complete: () => {
-        this._clusterReady = true
-        this._syncNativeMarkers()
+      success: () => {
+        if (this._mapCtx === ctx) this._clusterReady = true
       },
-      fail: (err) => {
-        console.warn('[map] initMarkerCluster fail', err)
-        this._clusterReady = false
+      fail: (err) => console.warn('[map] initMarkerCluster fail', err),
+      complete: () => {
+        if (this._mapCtx !== ctx) return
+        this._clusterInitializing = false
         this._syncNativeMarkers()
       }
     })
@@ -175,12 +315,25 @@ Page({
   _onNativeClusterCreate(res) {
     if (this.__mxhUnloaded || !this._mapCtx) return
     const clusters = (res && res.clusters) || []
-    if (!clusters.length) return
+    const ctx = this._mapCtx
+    if (!this.data.mapSetting.showMarkers || !clusters.length) {
+      const previousMarkerIds = this._clusterMarkerIds.slice()
+      this._clusterMarkerIds = []
+      this._clusterRenderSequence++
+      if (previousMarkerIds.length && typeof ctx.removeMarkers === 'function') {
+        ctx.removeMarkers({ markerIds: previousMarkerIds })
+      }
+      return
+    }
 
+    const renderSequence = ++this._clusterRenderSequence
+    const previousMarkerIds = this._clusterMarkerIds.slice()
     const markers = clusters.map((cluster) => {
       const center = cluster.center || {}
       const count = (cluster.markerIds && cluster.markerIds.length) || 0
+      const id = 100000 + (++this._clusterMarkerSequence)
       return {
+        id,
         latitude: Number(center.latitude),
         longitude: Number(center.longitude),
         width: 56,
@@ -203,10 +356,20 @@ Page({
       }
     })
 
-    this._mapCtx.addMarkers({
-      markers,
-      clear: false
-    })
+    const addClusters = () => {
+      if (this.__mxhUnloaded || this._mapCtx !== ctx || renderSequence !== this._clusterRenderSequence) return
+      this._clusterMarkerIds = markers.map((marker) => marker.id)
+      ctx.addMarkers({ markers, clear: false })
+    }
+    if (previousMarkerIds.length && typeof ctx.removeMarkers === 'function') {
+      ctx.removeMarkers({
+        markerIds: previousMarkerIds,
+        success: addClusters,
+        fail: addClusters
+      })
+      return
+    }
+    addClusters()
   },
 
   _onNativeClusterClick(res) {
@@ -232,11 +395,13 @@ Page({
       return
     }
     // 等原生聚合初始化完成再挂点（否则 joinCluster 可能不生效）
-    if (!this._clusterReady && typeof this._mapCtx.initMarkerCluster === 'function') {
+    if (this._clusterInitializing) {
       this._pendingMarkerSync = true
       return
     }
     this._pendingMarkerSync = false
+    this._clusterRenderSequence++
+    this._clusterMarkerIds = []
 
     const show = this.data.mapSetting && this.data.mapSetting.showMarkers !== false
     const cards = this._geoCards || []
@@ -338,20 +503,20 @@ Page({
   },
 
   async _loadInner() {
-    // 一进地图：先把当前位置放到中心
+    // 有定位：以定位为中心；拿不到定位时用固定兜底 DEFAULT_CENTER
     const loc = await this.getUserLocation()
-    if (loc) {
-      this.setData({
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        'mapSetting.showLocation': true,
-        'mapSetting.scale': EMPTY_SCALE
-      })
+    if (this.__mxhUnloaded) return
+    if (!this._viewportInteracted && !this.data.ready && !(cache.getMapPrefs() || {}).simulationAnchorId) {
+      this.setData(loc || DEFAULT_CENTER)
     }
 
     let fill = null
     try {
-      fill = await api.backfillMissingCardGeo()
+      fill = await api.backfillMissingCardGeo({
+        baseLoc: loc
+          ? { latitude: loc.latitude, longitude: loc.longitude }
+          : null
+      })
       if (fill && fill.updated > 0) {
         wx.showToast({
           title: `已整理 ${fill.withGeoCount || fill.updated} 只猫的足迹`,
@@ -369,13 +534,33 @@ Page({
       const listed = await api.listCards({})
       cards = listed.cards || []
     }
-    const withGeo = (cards || [])
+    if (this.__mxhUnloaded) return
+    this._footprintCards = cards || []
+    this._footprintLocation = loc
+    this._renderFootprints()
+  },
+
+  _renderFootprints() {
+    const cards = this._footprintCards
+    const withGeo = cards
       .map((c) => {
         const geo = normalizeGeo(c && c.geo)
         return geo ? { ...c, geo } : null
       })
       .filter(Boolean)
-    this._geoCards = withGeo
+    const { simulationAnchorId } = cache.getMapPrefs() || {}
+    const anchor = withGeo.find((card) => card._id === simulationAnchorId)
+    if (anchor) {
+      const others = cards.filter((card) => card._id !== anchor._id)
+        .sort((a, b) => String(a._id).localeCompare(String(b._id)))
+      this._geoCards = [anchor, ...others.map((card, index) => ({
+        ...card,
+        geo: spreadFootprints(anchor.geo.lat, anchor.geo.lng, index, cards.length),
+        simulatedGeo: true
+      }))]
+    } else {
+      this._geoCards = withGeo
+    }
 
     const patch = {
       bubble: null,
@@ -383,59 +568,247 @@ Page({
       detailCard: null,
       clusterSheet: null,
       ready: true,
-      footprintCount: withGeo.length,
-      albumCount: (cards || []).length
+      footprintCount: this._geoCards.length,
+      albumCount: cards.length,
+      simulatingFootprints: !!anchor
     }
 
-    if (!loc) {
-      if (withGeo.length) {
-        patch.latitude = withGeo.reduce((s, c) => s + c.geo.lat, 0) / withGeo.length
-        patch.longitude = withGeo.reduce((s, c) => s + c.geo.lng, 0) / withGeo.length
-        patch['mapSetting.scale'] = withGeo.length === 1 ? 14 : 12
+    const loc = this._footprintLocation
+    // 首次进入：定位 > 固定兜底；模拟锚点优先
+    if (!this._viewportInteracted && !this.data.ready) {
+      if (anchor) {
+        patch.latitude = anchor.geo.lat
+        patch.longitude = anchor.geo.lng
+      } else if (loc) {
+        Object.assign(patch, loc)
       } else {
-        patch.latitude = DEFAULT_CENTER.latitude
-        patch.longitude = DEFAULT_CENTER.longitude
+        Object.assign(patch, DEFAULT_CENTER)
       }
     }
 
-    this.setData(patch, () => {
-      if (this._clusterReady || !this._mapCtx) {
-        this._syncNativeMarkers()
-      } else {
-        this._pendingMarkerSync = true
-      }
-    })
+    this.setData(patch, () => this._syncNativeMarkers())
+  },
+
+  onRestoreFootprints() {
+    if (!this.data.simulatingFootprints) return
+    const prefs = { ...cache.getMapPrefs() }
+    delete prefs.simulationAnchorId
+    cache.setMapPrefs(prefs)
+    this.setData({ showSettings: false })
+    this._renderFootprints()
+  },
+
+  onMapTouchStart(e) {
+    // 新触点到达时丢弃上一轮手势留下的校准回调。
+    this._clearPinchTracking()
+    this._scaleReadSequence++
+    const span = pinchSpan(e.touches)
+    if (!span || !this.data.mapSetting.enableZoom) return
+    this._startScaleSampling()
+    if (!this.data.mapSetting.skew) return
+    this._viewportInteracted = true
+    this._pinch = { span, scale: this._viewScale, endScale: null }
+  },
+
+  onMapTouchMove(e) {
+    const span = pinchSpan(e.touches)
+    if (!span || !this.data.mapSetting.enableZoom) return
+    this._startScaleSampling()
+    if (!this.data.mapSetting.skew) return
+    if (!this._pinch) this.onMapTouchStart(e)
+    const pinch = this._pinch
+    if (!pinch) return
+
+    // 地图缩放每增加一级，屏幕上的同一段距离约翻倍。
+    if (span === pinch.span) return
+    pinch.scale = clampZoom(pinch.scale + Math.log2(span / pinch.span), this.data.mapSetting)
+    pinch.span = span
+    pinch.endScale = null
+    if (this._pinchTiltTimer) return
+    this._pinchTiltTimer = setTimeout(() => {
+      this._pinchTiltTimer = null
+      if (this._pinch === pinch) this._applyZoomTilt(pinch.scale, false)
+    }, PINCH_TILT_FRAME_MS)
+  },
+
+  onMapTouchEnd(e) {
+    if (pinchSpan(e.touches)) return
+    this._stopScaleSampling()
+    this._finishPinch()
+  },
+
+  onMapTouchCancel() {
+    this._stopScaleSampling()
+    this._finishPinch()
+  },
+
+  _finishPinch() {
+    if (!this._pinch) return
+    const { scale, endScale } = this._pinch
+    this._clearPinchTracking()
+    this._applyZoomTilt(endScale ?? scale, endScale !== null)
+    // 松手后补读一次，取原生动画完成后的缩放和倾角。
+    this._pinchSettleTimer = setTimeout(() => {
+      this._pinchSettleTimer = null
+      this._refreshZoomTilt()
+    }, PINCH_SETTLE_MS)
+  },
+
+  _clearPinchTracking() {
+    this._pinch = null
+    clearTimeout(this._pinchTiltTimer)
+    clearTimeout(this._pinchSettleTimer)
+    this._pinchTiltTimer = null
+    this._pinchSettleTimer = null
   },
 
   onRegionChange(e) {
-    // 拖拽结束不要回写 scale：会触发地图重新套缩放，看起来像「拖完自动缩放」
-    const type = (e && e.type) || (e.detail && e.detail.type) || ''
-    if (type && type !== 'end') return
-    const causedBy = (e && e.causedBy) || (e.detail && e.detail.causedBy) || ''
-    // 仅双指缩放时回写；drag / update 等一律忽略
-    if (causedBy !== 'scale') return
+    const detail = e.detail || {}
+    const type = e.type === 'begin' || e.type === 'end' ? e.type : detail.type
+    const cause = detail.causedBy || e.causedBy
+    if (cause === 'scale' || cause === 'gesture' || cause === 'drag') this._viewportInteracted = true
 
-    const detailScale = Number(e && e.detail && e.detail.scale)
-    if (!Number.isFinite(detailScale)) return
-    if (Math.abs((this.data.mapSetting.scale || 0) - detailScale) > 0.05) {
-      this.setData({ 'mapSetting.scale': detailScale })
+    // 手指移动期间以触点为准，地图提交倾角产生的事件可能带旧的缩放值。
+    if (this._pinch) {
+      if (type === 'end' && (cause === 'scale' || cause === 'gesture' || !cause)) {
+        if (Number.isFinite(detail.scale)) this._pinch.endScale = detail.scale
+        this._updateCameraReadout(detail.scale, detail.skew)
+      }
+      return
+    }
+    if (type === 'begin') {
+      if (cause !== 'update' && this.data.mapSetting.enableZoom) this._startScaleSampling()
+      return
+    }
+    if (type !== 'end') return
+    if (cause === 'update' && (this._pinchSettleTimer || this._scaleSampleTimer)) return
+    if (cause === 'drag') {
+      // 原生拖拽结束可能晚于下一次缩放开始。继续取样，忽略这条事件里的旧镜头值。
+      this._startScaleSampling(SCALE_SAMPLE_TAIL_MS)
+      return
+    }
+    if (this._scaleSampleTimer) this._scaleSampleUntil = Date.now() + SCALE_SAMPLE_TAIL_MS
+    this._refreshZoomTilt(detail.scale, detail.skew)
+  },
+
+  _refreshZoomTilt(scale, skew) {
+    const sequence = ++this._scaleReadSequence
+    this._updateCameraReadout(scale, skew)
+    this._applyZoomTilt(scale)
+    if (!Number.isFinite(scale)) {
+      this._readMapValue('getScale', 'scale', null).then((actualScale) => {
+        if (sequence !== this._scaleReadSequence || this._pinch) return
+        this._updateCameraReadout(actualScale)
+        this._applyZoomTilt(actualScale)
+      })
+    }
+    if (!Number.isFinite(skew)) {
+      this._readMapValue('getSkew', 'skew', null).then((actualSkew) => {
+        if (sequence === this._scaleReadSequence && !this._pinch) this._updateCameraReadout(null, actualSkew)
+      })
     }
   },
 
+  _updateCameraReadout(scale, skew) {
+    if (this.__mxhUnloaded) return
+    const patch = {}
+    if (Number.isFinite(scale)) {
+      const text = scale.toFixed(2)
+      if (text !== this.data.cameraZoomText) patch.cameraZoomText = text
+    }
+    if (Number.isFinite(skew)) {
+      const text = skew.toFixed(1) + '°'
+      if (text !== this.data.cameraTiltText) patch.cameraTiltText = text
+    }
+    if (Object.keys(patch).length) this.setData(patch)
+  },
+
+  _startScaleSampling(duration = SCALE_SAMPLE_LIMIT_MS) {
+    this._scaleSampleUntil = Math.max(this._scaleSampleUntil, Date.now() + duration)
+    if (this._scaleSampleTimer) return
+    // 部分客户端只在手势开始和结束时发 regionchange。
+    const sample = async () => {
+      const timer = this._scaleSampleTimer
+      const sequence = this._scaleReadSequence
+      const isCurrent = () => !this.__mxhUnloaded && sequence === this._scaleReadSequence
+      if (!this._samplingSkew) {
+        this._samplingSkew = true
+        this._readMapValue('getSkew', 'skew', null).then((skew) => {
+          this._samplingSkew = false
+          if (isCurrent()) this._updateCameraReadout(null, skew)
+        })
+      }
+      const scale = await this._readMapValue('getScale', 'scale', null)
+      if (this._scaleSampleTimer !== timer || this.__mxhUnloaded) return
+      if (sequence === this._scaleReadSequence) {
+        this._updateCameraReadout(scale)
+        if (!this._pinch) this._applyZoomTilt(scale)
+      }
+      this._scaleSampleTimer = Date.now() < this._scaleSampleUntil ? setTimeout(sample, SCALE_SAMPLE_MS) : null
+    }
+    this._scaleSampleTimer = setTimeout(sample, SCALE_SAMPLE_MS)
+  },
+
+  _stopScaleSampling() {
+    clearTimeout(this._scaleSampleTimer)
+    this._scaleSampleTimer = null
+    this._scaleSampleUntil = 0
+    this._scaleReadSequence++
+  },
+
+  _applyZoomTilt(scale, confirmed = true) {
+    if (this.__mxhUnloaded || !Number.isFinite(scale)) return
+    const setting = this.data.mapSetting
+    scale = clampZoom(scale, setting)
+    if (confirmed) this._viewScale = scale
+    const skew = tiltAtScale(scale, setting.skew)
+    if (skew === this._appliedTilt) return
+    this._appliedTilt = skew
+    // 合并到现有地图配置，避免在手势中丢失其他原生属性。
+    const patch = { 'nativeMapSetting.skew': skew }
+    const enable3D = setting.enable3D && skew > 0
+    if (enable3D !== this.data.nativeMapSetting.enable3D) patch['nativeMapSetting.enable3D'] = enable3D
+    this.setData(patch)
+  },
 
   getUserLocation() {
-    return new Promise((resolve) => {
-      wx.getLocation({
-        type: 'gcj02',
-        success: (res) => {
-          resolve({
-            latitude: res.latitude,
-            longitude: res.longitude
-          })
-        },
-        fail: () => resolve(null)
-      })
-    })
+    if (!this._locationRequest) {
+      this._locationRequest = getCurrentPosition()
+        .then((loc) => loc || { ...DEFAULT_CENTER })
+        .finally(() => {
+          this._locationRequest = null
+        })
+    }
+    return this._locationRequest
+  },
+
+  async _centerOnUser(loc) {
+    const ctx = this._mapCtx
+    if (ctx && typeof ctx.moveToLocation === 'function') {
+      const moved = await this._readMapValue('moveToLocation', null, false, loc)
+      if (this.__mxhUnloaded) return
+      if (moved) {
+        await new Promise((resolve) => this.setData(loc, resolve))
+        return
+      }
+    }
+    const current = await this._readMapValue('getCenterLocation', null, null)
+    if (this.__mxhUnloaded) return
+    if (current && Number.isFinite(current.latitude) && Number.isFinite(current.longitude) &&
+        loc.latitude === this.data.latitude && loc.longitude === this.data.longitude &&
+        (Math.abs(current.latitude - loc.latitude) > 0.00001 || Math.abs(current.longitude - loc.longitude) > 0.00001)) {
+      // 拖动会改变原生中心，经纬度绑定可能仍等于上次定位。
+      await new Promise((resolve) => this.setData({
+        latitude: current.latitude,
+        longitude: current.longitude
+      }, resolve))
+    }
+    if (!this.__mxhUnloaded) {
+      await new Promise((resolve) => this.setData({
+        latitude: loc.latitude,
+        longitude: loc.longitude
+      }, resolve))
+    }
   },
 
   onBack() {
@@ -456,50 +829,119 @@ Page({
     this.setData({ showSettings: false })
   },
 
-  onResetSettings() {
-    this.setData({ mapSetting: createDefaultSetting() }, () => {
-      this._syncNativeMarkers()
+  _readMapValue(method, key, fallback, options) {
+    const ctx = this._mapCtx
+    if (!ctx || typeof ctx[method] !== 'function') return Promise.resolve(fallback)
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(fallback), CAMERA_READ_TIMEOUT_MS)
+      const finish = (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      }
+      try {
+        ctx[method]({
+          ...options,
+          success: (result) => finish(key ? (result && Number.isFinite(result[key]) ? result[key] : fallback) : result || true),
+          fail: () => finish(fallback)
+        })
+      } catch (e) {
+        finish(fallback)
+      }
     })
+  },
+
+  onSaveSettings() {
+    const saved = cache.getMapPrefs() || {}
+    cache.setMapPrefs({ ...saved, autoView: sanitizeSetting(this.data.mapSetting) })
+    this.setData({ settingsDirty: false })
+    wx.showToast({ title: '已保存地图设置', icon: 'none' })
+  },
+
+  onResetSettings() {
+    this._applyMapSetting(createBaseSetting(), { applyScale: true, refreshSlider: true })
+    this._syncNativeMarkers()
   },
 
   onToggleSetting(e) {
     const key = e.currentTarget.dataset.key
-    if (!key) return
-    this.setData({ [`mapSetting.${key}`]: !this.data.mapSetting[key] }, () => {
-      if (key === 'showMarkers') this._syncNativeMarkers()
-    })
+    if (typeof this.data.mapSetting[key] !== 'boolean') return
+    const next = { ...this.data.mapSetting, [key]: !this.data.mapSetting[key] }
+    if (['showMarkers', 'showWash', 'showVeil'].includes(key)) {
+      this.setData({ mapSetting: next, settingsDirty: true }, () => {
+        if (key === 'showMarkers') this._syncNativeMarkers()
+      })
+      return
+    }
+    this._applyMapSetting(next)
   },
 
   onSlideSetting(e) {
-    const key = e.currentTarget.dataset.key
-    if (!key) return
-    const value = Number(e.detail.value)
-    this.setData({ [`mapSetting.${key}`]: value })
+    this._applyCameraSetting(e.currentTarget.dataset.key, Number(e.detail.value))
   },
 
   onNudgeSetting(e) {
     const { key, dir, step } = e.currentTarget.dataset
-    if (!key) return
-    const option = SETTING_GROUPS.flatMap((g) => g.options).find((o) => o.key === key)
-    if (!option || option.type !== 'range') return
-    const cur = Number(this.data.mapSetting[key]) || 0
-    const delta = (Number(dir) || 0) * (Number(step) || option.step || 1)
-    const next = Math.min(option.max, Math.max(option.min, cur + delta))
-    this.setData({ [`mapSetting.${key}`]: next })
+    const option = this.data.settingGroups.flatMap((group) => group.options).find((entry) => entry.key === key)
+    if (!option || option.type !== 'range' || option.disabled) return
+    const current = this.data.mapSetting[key]
+    const delta = Number(dir) * (Number(step) || option.step)
+    const value = Math.min(option.max, Math.max(option.min, current + delta))
+    this._applyCameraSetting(key, value, true)
+  },
+
+  _applyCameraSetting(key, value, refreshSlider = false) {
+    if (![...ZOOM_KEYS, 'rotate', 'skew'].includes(key) || !Number.isFinite(value)) return
+    const current = this.data.mapSetting
+    if (key === 'minScale') value = Math.min(value, current.maxScale - 1)
+    if (key === 'maxScale') value = Math.max(value, current.minScale + 1)
+    const next = sanitizeSetting({ ...current, [key]: value })
+    if (next[key] === current[key]) return
+    this._applyMapSetting(next, { applyScale: key === 'scale', refreshSlider })
+  },
+
+  _applyMapSetting(setting, { applyScale = false, refreshSlider = false } = {}) {
+    const patch = { mapSetting: setting, settingsDirty: true }
+    const current = this.data.mapSetting
+    if (setting.minScale !== current.minScale || setting.maxScale !== current.maxScale) {
+      patch.settingGroups = settingGroupsFor(setting)
+    }
+    const scale = applyScale ? setting.scale : clampZoom(this._viewScale, setting)
+    if (applyScale || scale !== this._viewScale) {
+      this._clearPinchTracking()
+      this._stopScaleSampling()
+      this._viewScale = scale
+      patch.mapScale = scale
+    }
+    patch.nativeMapSetting = nativeMapSetting(setting, this._viewScale)
+    this._appliedTilt = patch.nativeMapSetting.skew
+    if (refreshSlider) patch.sliderSeed = this.data.sliderSeed + 1
+    this.setData(patch)
   },
 
   async onRecenter() {
+    this._viewportInteracted = true
     const loc = await this.getUserLocation()
+    if (this.__mxhUnloaded) return
     if (!loc) {
       wx.showToast({ title: '定位失败，请检查权限', icon: 'none' })
       return
     }
+    this._footprintLocation = loc
+    this._stopCenterAnim()
+    await this._centerOnUser(loc)
+  },
+
+  onShowAllFootprints() {
+    if (this.__mxhUnloaded || !this._geoCards.length) return
+    const items = this._geoCards.slice()
+      .sort((a, b) => (b.shotAt || 0) - (a.shotAt || 0))
+      .map((card) => this._bubbleFromCard(card))
     this.setData({
-      'mapSetting.scale': EMPTY_SCALE,
-      'mapSetting.showLocation': true
+      bubble: null,
+      bubbleGroup: null,
+      detailCard: null,
+      clusterSheet: { allFootprints: true, title: `足迹 · ${items.length} 只猫`, items }
     })
-    // 只用经纬度居中：moveToLocation 在开发者工具会直接报错
-    this._lerpToCenter(loc.latitude, loc.longitude, 480)
   },
 
   _markerIdFromEvent(e) {
@@ -536,6 +978,7 @@ Page({
       dateShort: formatDateShort(card.shotAt) || '',
       place: (card.placeText || '').trim() === '已记录当前位置' ? '' : (card.placeText || '').trim(),
       geoLabel,
+      simulatedGeo: !!card.simulatedGeo,
       note: (card.note || '').trim(),
       memoryCount: Number(card.memoryCount) || 0,
       pending,
@@ -593,6 +1036,7 @@ Page({
       clusterSheet: {
         count: group.count,
         title: `这里有 ${group.count} 只猫`,
+        subtitle: '相邻足迹合并在一起，点开可切换查看',
         items: group.items
       }
     })
@@ -653,6 +1097,11 @@ Page({
   onPickClusterItem(e) {
     const id = e.currentTarget.dataset.id
     const sheet = this.data.clusterSheet
+    if (sheet && sheet.allFootprints) {
+      const item = sheet.items.find((entry) => entry.id === id)
+      if (item) this.setData({ detailCard: item })
+      return
+    }
     const group = this.data.bubbleGroup
     const items = (group && group.items) || (sheet && sheet.items) || []
     const index = items.findIndex((x) => x.id === id)
@@ -710,5 +1159,39 @@ Page({
 
   onGoShoot() {
     nav.navigateTo(this, '/pages/camera/camera')
+  },
+
+  /** 图鉴有猫但足迹不全时：再补一轮坐标 */
+  async onRepairFootprints() {
+    if (this._repairing) return
+    this._repairing = true
+    wx.showLoading({ title: '整理足迹…', mask: true })
+    try {
+      const loc = await this.getUserLocation()
+      if (!loc) {
+        wx.hideLoading()
+        wx.showToast({ title: '请先开启定位权限', icon: 'none' })
+        this._repairing = false
+        return
+      }
+      const fill = await api.backfillMissingCardGeo({
+        baseLoc: { latitude: loc.latitude, longitude: loc.longitude }
+      })
+      wx.hideLoading()
+      const withGeo = ((fill && fill.footprintCards) || []).length
+      const total = (fill && fill.total) || 0
+      if (withGeo >= total && total > 0) {
+        wx.showToast({ title: `已补齐 ${withGeo} 只猫的足迹`, icon: 'none' })
+      } else if (withGeo > 0) {
+        wx.showToast({ title: `已有足迹 ${withGeo}/${total} 只`, icon: 'none' })
+      } else {
+        wx.showToast({ title: '暂时没能补上足迹', icon: 'none' })
+      }
+      await this.load()
+    } catch (e) {
+      wx.hideLoading()
+      wx.showToast({ title: '整理失败，请重试', icon: 'none' })
+    }
+    this._repairing = false
   }
 })

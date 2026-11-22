@@ -53,6 +53,7 @@ Page({
         displayImage: (card && (card.cutoutPath || card.originalPath)) || '',
         memories: (memories || []).map((m) => ({
           ...m,
+          imagePath: m.imageFileId || m.imagePath || '',
           timeLabel: formatDateTime(m.createdAt)
         })),
         ready: true

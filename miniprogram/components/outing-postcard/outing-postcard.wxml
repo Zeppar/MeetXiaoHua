@@ -1,0 +1,12 @@
+<view wx:if="{{postcard}}" class="outing-postcard">
+  <view class="postcard-scene">
+    <image class="postcard-background" src="{{postcard.sceneImage}}" mode="aspectFill" />
+    <image class="postcard-cat" src="{{postcard.catImage && brokenCatImage !== postcard.catImage ? postcard.catImage : '/assets/art/cat-sit.svg'}}" mode="aspectFit" data-src="{{postcard.catImage}}" binderror="onCatImageError" />
+  </view>
+  <text class="postcard-story">{{postcard.story}}</text>
+  <view wx:if="{{postcard.friendImage}}" class="postcard-friend">
+    <image class="friend-photo" src="{{brokenFriendImage === postcard.friendImage ? '/assets/art/cat-shadow.svg' : postcard.friendImage}}" mode="aspectFit" data-src="{{postcard.friendImage}}" binderror="onFriendImageError" />
+    <text>{{postcard.friendCaption}}</text>
+  </view>
+  <text wx:if="{{postcard.simulated}}" class="postcard-source">小猫故事</text>
+</view>

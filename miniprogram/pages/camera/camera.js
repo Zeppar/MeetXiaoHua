@@ -1,4 +1,5 @@
 const api = require('../../services/api')
+const { findCatMatches } = require('../../services/cat-identity')
 const copy = require('../../constants/copy')
 const { UNKNOWN_LABEL, CAT_BREEDS } = require('../../constants/breeds')
 const { blurCoordinate, isValidGeo, getCurrentPosition } = require('../../utils/geo-blur')
@@ -88,6 +89,8 @@ Page({
     showLocationAuth: false,
     showNoteModal: false,
     showPlaceModal: false,
+    checkingMatches: false,
+    catMatches: [],
     note: '',
     placeText: '',
     geo: null,
@@ -141,6 +144,13 @@ Page({
 
   onReady() {
     this.initMattingCanvas()
+    try {
+      wx.createSelectorQuery().select('#identityCanvas').fields({ node: true }).exec((res) => {
+        this.identityCanvas = res && res[0] && res[0].node
+      })
+    } catch (e) {
+      // 查重仍可使用离屏画布或文件摘要。
+    }
   },
 
   onShow() {
@@ -381,6 +391,7 @@ Page({
         }
       })
       if (refining) this.startRefine(token, result.refine, result.cutoutPath)
+      this._startCatMatch(token, result.cutoutPath)
     }
 
     setTimeout(() => {
@@ -648,7 +659,9 @@ Page({
   },
 
   onRetake() {
+    if (this._saving) return
     this._refinePromise = null
+    this._catMatch = null
     this.recognizeToken += 1
     this.clearRecognizeTimer()
     this.clearElapsedTimer()
@@ -661,6 +674,8 @@ Page({
       geo: null,
       showNoteModal: false,
       showPlaceModal: false,
+      checkingMatches: false,
+      catMatches: [],
       timingElapsedText: '',
       timingSteps: [],
       timingTotalText: ''
@@ -679,8 +694,79 @@ Page({
     nav.switchTab(this, '/pages/home/home')
   },
 
-  onSaveStart() {
-    this.setData({ showNoteModal: true, note: '' })
+  _startCatMatch(token, quickCutout) {
+    if (this._catMatch && this._catMatch.token === token) return this._catMatch.promise
+    const r = this.data.result
+    const original = r.originalPath || this.data.tempPath
+    const cutout = quickCutout || r.cutoutPath
+    const promise = findCatMatches({ original, cutout: !r.mattingFailed && cutout !== original ? cutout : '' }, {
+      canvas: this.identityCanvas,
+      page: this,
+      isCurrent: () => token === this.recognizeToken
+    }).catch((err) => {
+      console.warn('[camera] cat matching failed', err)
+      return { identity: null, matches: [] }
+    })
+    this._catMatch = { token, promise, identity: null }
+    return promise
+  },
+
+  async onSaveStart() {
+    const { state, result, checkingMatches, catMatches, showNoteModal, showPlaceModal } = this.data
+    if (state !== 'preview' || !result || this._saving || checkingMatches || catMatches.length || showNoteModal || showPlaceModal) return
+    const token = this.recognizeToken
+    this.setData({ checkingMatches: true })
+    const { identity, matches } = await this._startCatMatch(token)
+    if (token !== this.recognizeToken) return
+    this._catMatch.identity = identity
+    const exact = matches.find((match) => match.exact)
+    if (exact) {
+      wx.redirectTo({
+        url: '/pages/card-detail/card-detail?id=' + encodeURIComponent(exact.id),
+        fail: () => {
+          if (token !== this.recognizeToken) return
+          this.setData({ checkingMatches: false })
+          wx.showToast({ title: '猫卡打开失败，请重试', icon: 'none' })
+        }
+      })
+      return
+    }
+    this.setData({ checkingMatches: false, catMatches: matches })
+    if (!matches.length) this.onAddNewCat()
+  },
+
+  onCloseCatMatches() {
+    if (!this._saving) this.setData({ catMatches: [] })
+  },
+
+  onAddNewCat() {
+    if (!this._saving) this.setData({ catMatches: [], showNoteModal: true, note: '' })
+  },
+
+  async onSaveCatMemory(e) {
+    const cardId = e.currentTarget.dataset.id
+    const r = this.data.result
+    if (this._saving || !r || !this.data.catMatches.some((match) => match.id === cardId)) return
+    this._saving = true
+    this.setData({ saving: true })
+    try {
+      await api.createMemory({
+        cardId,
+        imagePath: r.originalPath || this.data.tempPath,
+        photoIdentity: this._catMatch && this._catMatch.identity
+      })
+    } catch (err) {
+      this._saving = false
+      if (this.__mxhUnloaded) return
+      this.setData({ saving: false })
+      wx.showToast({ title: (err && err.message) || '保存失败，请重试', icon: 'none' })
+      return
+    }
+    this._saving = false
+    if (this.__mxhUnloaded) return
+    this.setData({ saving: false, catMatches: [] })
+    wx.showToast({ title: '已存入记忆', icon: 'success' })
+    nav.redirectTo(this, '/pages/card-detail/card-detail?id=' + encodeURIComponent(cardId))
   },
 
   onNoteInput(e) {
@@ -711,7 +797,9 @@ Page({
 
   async ensureGeo() {
     this.setData({ locating: true, locationHint: copy.tips.locating })
+    const token = this.recognizeToken
     const loc = await getCurrentPosition()
+    if (token !== this.recognizeToken || !this.data.showPlaceModal) return false
     if (!loc) {
       this.setData({
         locating: false,
@@ -743,13 +831,13 @@ Page({
   },
 
   async onPlaceDone(e) {
+    if (!this.data.showPlaceModal || this._saving) return
     const placeText = ((e && e.detail && e.detail.value) || this.data.placeText || '').trim()
     this.setData({ placeText })
     if (!isValidGeo(this.data.geo)) {
       const ok = await this.ensureGeo()
       if (!ok) return
     }
-    this.setData({ showPlaceModal: false })
     this.persistCard()
   },
 
@@ -784,17 +872,19 @@ Page({
     // 同步锁：setData 是异步的，且下面要 await 定位，两次快速点击都会穿过 data.saving
     if (this._saving || this.data.saving || !this.data.result) return
     this._saving = true
+    const token = this.recognizeToken
     if (!isValidGeo(this.data.geo)) {
       const ok = await this.ensureGeo()
       if (!ok) {
         this._saving = false
-        this.setData({ showPlaceModal: true })
+        if (token === this.recognizeToken) this.setData({ showPlaceModal: true })
         return
       }
     }
 
+    this.setData({ saving: true, showPlaceModal: false })
     await this.waitRefineIfNeeded()
-    this.setData({ saving: true })
+    if (token !== this.recognizeToken) return
     wx.showLoading({ title: '保存中', mask: true })
 
     const r = this.data.result
@@ -812,7 +902,8 @@ Page({
         shotAt: Date.now(),
         note: this.data.note,
         placeText: this.data.placeText,
-        geo: this.data.geo
+        geo: this.data.geo,
+        photoIdentity: this._catMatch && this._catMatch.identity
       })
       wx.hideLoading()
       this.setData({ saving: false })

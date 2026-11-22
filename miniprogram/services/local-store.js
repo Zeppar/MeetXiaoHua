@@ -13,7 +13,8 @@ const {
   normalizeRecognizedBreed,
   ensureRecognizedBreedField
 } = require('../utils/breed-review')
-const { formatDistanceLabel, randomDistanceKm, pickBehavior, DURATIONS, randBetween } = require('../constants/outing')
+const { formatDistanceLabel, randomDistanceKm, pickBehavior, DURATIONS, randBetween, HOUR_MS } = require('../constants/outing')
+const { normalizePhotoIdentity, appendIdentity } = require('../utils/photo-identity')
 const STORE_KEY = 'mxh_local_db_v1'
 
 /** 内存缓存：同一会话避免每次进页都同步读整库 */
@@ -53,6 +54,13 @@ function load() {
         released: raw.released || [],
         breedReviews: raw.breedReviews || []
       }
+      if (restoreOutingDurations(memDb)) {
+        try {
+          save(memDb)
+        } catch (e) {
+          console.warn('[local] save outing durations fail', e)
+        }
+      }
       return memDb
     }
   } catch (e) {
@@ -60,6 +68,33 @@ function load() {
   }
   memDb = emptyDb()
   return memDb
+}
+
+// 旧版把一小时存成 30 秒。换算尚未结束的计时，历史记录保留原时间。
+function restoreOutingDurations(db) {
+  const oldHour = 30 * 1000
+  const toRealHours = (duration) => duration * (HOUR_MS / oldHour)
+  let changed = false
+  Object.values(db.users).forEach((user) => {
+    const outing = user.outing
+    if (!outing) return
+    const phase = outing.status
+    const field = { home: 'homeDuration', out: 'travelDuration', visiting: 'visitDuration' }[phase]
+    if (field && outing[field] > 0 && outing[field] <= 12 * oldHour) {
+      outing[field] = toRealHours(outing[field])
+      changed = true
+    }
+  })
+  db.visits.forEach((visit) => {
+    const duration = visit.leaveAt - visit.arriveAt
+    if (visit.status !== 'active' || duration <= 0 || duration > 12 * oldHour) return
+    visit.leaveAt = visit.arriveAt + toRealHours(duration)
+    if (visit._mockAutoPetAt > visit.arriveAt) {
+      visit._mockAutoPetAt = visit.arriveAt + toRealHours(visit._mockAutoPetAt - visit.arriveAt)
+    }
+    changed = true
+  })
+  return changed
 }
 
 function ensureVisitLogs(db) {
@@ -300,6 +335,16 @@ async function getProfile() {
   return { user }
 }
 
+function resetHomeOuting(user, cardId) {
+  if (outingEngine.isAway(user.outing)) return
+  Object.assign(user.outing, {
+    status: cardId ? 'home' : 'idle',
+    cardId,
+    homeSince: cardId ? Date.now() : 0,
+    homeDuration: cardId ? randBetween(DURATIONS.homeMin, DURATIONS.homeMax) : 0
+  })
+}
+
 /** 放入小屋：最多 3 只，地位相同；满员抛 ROOM_FULL */
 async function addCardToRoom(cardId) {
   const db = load()
@@ -326,10 +371,7 @@ async function addCardToRoom(cardId) {
 
   if (!user.displayCardId) {
     user.displayCardId = cardId
-    user.outing.status = 'home'
-    user.outing.cardId = cardId
-    user.outing.homeSince = Date.now()
-    user.outing.homeDuration = randBetween(DURATIONS.homeMin, DURATIONS.homeMax)
+    resetHomeOuting(user, cardId)
     user.roomMateIds = normalizeMateIds(user.roomMateIds, cardId)
   } else {
     user.roomMateIds = normalizeMateIds([...(user.roomMateIds || []), cardId], user.displayCardId)
@@ -358,16 +400,11 @@ async function removeCardFromRoom(cardId) {
     if (rest.length) {
       user.displayCardId = rest[0]
       user.roomMateIds = rest.slice(1)
-      user.outing.status = 'home'
-      user.outing.cardId = user.displayCardId
-      user.outing.homeSince = Date.now()
-      user.outing.homeDuration = randBetween(DURATIONS.homeMin, DURATIONS.homeMax)
     } else {
       user.displayCardId = ''
       user.roomMateIds = []
-      user.outing.status = 'idle'
-      user.outing.cardId = ''
     }
+    resetHomeOuting(user, user.displayCardId)
   } else {
     user.roomMateIds = normalizeMateIds(
       (user.roomMateIds || []).filter((id) => id !== cardId),
@@ -397,10 +434,7 @@ async function setRoomMain(cardId) {
 
   user.displayCardId = cardId
   user.roomMateIds = normalizeMateIds(mates, cardId)
-  user.outing.status = 'home'
-  user.outing.cardId = cardId
-  user.outing.homeSince = Date.now()
-  user.outing.homeDuration = randBetween(DURATIONS.homeMin, DURATIONS.homeMax)
+  resetHomeOuting(user, cardId)
   save(db)
   return { user, toast: '', occupancy: roomOccupancy(user) }
 }
@@ -414,12 +448,8 @@ async function updateProfile(payload) {
   if (payload.displayCardId !== undefined) {
     const prev = user.displayCardId
     user.displayCardId = payload.displayCardId || ''
-    if (payload.displayCardId && payload.displayCardId !== prev) {
-      // 设为展示位：重新开始在家计时
-      user.outing.status = 'home'
-      user.outing.cardId = payload.displayCardId
-      user.outing.homeSince = Date.now()
-      user.outing.homeDuration = randBetween(DURATIONS.homeMin, DURATIONS.homeMax)
+    if (user.displayCardId !== prev) {
+      resetHomeOuting(user, user.displayCardId)
       // 从同住里拿掉，避免重复
       user.roomMateIds = normalizeMateIds(user.roomMateIds, user.displayCardId)
     }
@@ -462,6 +492,8 @@ function recordInboundVisitLog(db, visit) {
     name: visit.name || '',
     cutoutPath: visit.cutoutPath || '',
     behaviorText: visit.behaviorText || '',
+    ...(Number.isInteger(visit.behaviorIndex) ? { behaviorIndex: visit.behaviorIndex } : {}),
+    ...(visit.friend ? { friend: visit.friend } : {}),
     distanceKm: visit.distanceKm || 0,
     fromReleased: !!visit.fromReleased,
     pet: !!visit.petByHost,
@@ -531,6 +563,7 @@ function createVisitToHostLocal(db, ownerOpenId, payload) {
     breed: payload.guestCard.breed,
     cutoutPath: payload.guestCard.cutoutPath || payload.guestCard.originalPath || '',
     behaviorText: payload.behaviorText,
+    behaviorIndex: payload.behaviorIndex,
     distanceKm: payload.distanceKm,
     arriveAt: payload.arriveAt,
     leaveAt: payload.leaveAt,
@@ -541,7 +574,10 @@ function createVisitToHostLocal(db, ownerOpenId, payload) {
     // 模拟邻居有概率互动
     _mockAutoPetAt: payload.arriveAt + Math.floor((payload.leaveAt - payload.arriveAt) * (0.3 + Math.random() * 0.4)),
     _mockWillPet: Math.random() < 0.55,
-    _mockWillFed: Math.random() < 0.35
+    _mockWillFed: Math.random() < 0.35,
+    friend: Math.random() < 0.3
+      ? { name: '麦团', image: '/assets/illus/map-cat-2.png', kind: 'illustration' }
+      : null
   }
   db.visits.push(visit)
   return visit
@@ -640,37 +676,43 @@ function maybeSpawnMockVisitor(db, openid, now) {
 }
 
 /** 放生：离开图鉴，进入流浪池，以后可能去别人家串门 */
-async function releaseCard(cardId) {
+async function releaseCard(cardId, cloudRelease, cloudRoom) {
   const db = load()
   const openid = getOpenId()
   const user = ensureUser(db, openid)
-  const idx = db.cards.findIndex((c) => c._id === cardId)
-  if (idx < 0) throw new Error('找不到这只猫')
+  const idx = db.cards.findIndex((c) => c._id === cardId && c._openid === openid)
   const card = db.cards[idx]
-  if (card.breedReviewStatus === 'pending' || card.pendingBreed) {
-    throw new Error('审核中不能放生')
-  }
-  if (card._openid && card._openid !== openid) {
-    // 仍允许当前用户放生已认领的卡
+  if (!cloudRelease) {
+    if (!card) throw new Error('找不到这只猫')
+    if (outingEngine.isAway(user.outing) && user.outing.cardId === cardId) {
+      const err = new Error('这只猫还在外面，回来后才能放生')
+      err.code = 'CAT_AWAY'
+      throw err
+    }
+    if (card.breedReviewStatus === 'pending' || card.pendingBreed) {
+      throw new Error('审核中不能放生')
+    }
   }
 
-  db.cards.splice(idx, 1)
+  if (idx >= 0) db.cards.splice(idx, 1)
   if (!Array.isArray(db.released)) db.released = []
-  db.released.unshift({
-    _id: uid('rel'),
-    cardId: card._id,
-    breed: card.breed || '待识别',
-    name: card.name || '',
-    cutoutPath: card.cutoutPath || '',
-    originalPath: card.originalPath || '',
-    cutoutFileId: card.cutoutFileId || '',
-    originalFileId: card.originalFileId || '',
-    releasedBy: openid,
-    releasedAt: Date.now(),
-    visitCount: 0,
-    lastVisitAt: 0,
-    status: 'wandering'
-  })
+  if (!db.released.some((item) => item.cardId === cardId && item.releasedBy === openid)) {
+    db.released.unshift(cloudRelease || {
+      _id: uid('rel'),
+      cardId: card._id,
+      breed: card.breed || '待识别',
+      name: card.name || '',
+      cutoutPath: card.cutoutPath || '',
+      originalPath: card.originalPath || '',
+      cutoutFileId: card.cutoutFileId || '',
+      originalFileId: card.originalFileId || '',
+      releasedBy: openid,
+      releasedAt: Date.now(),
+      visitCount: 0,
+      lastVisitAt: 0,
+      status: 'wandering'
+    })
+  }
 
   user.roomMateIds = normalizeMateIds(
     (user.roomMateIds || []).filter((id) => id !== cardId),
@@ -683,15 +725,18 @@ async function releaseCard(cardId) {
       db.cards.find((c) => c._openid === openid)
     user.displayCardId = next ? next._id : ''
     user.roomMateIds = normalizeMateIds(user.roomMateIds, user.displayCardId)
-    if (next) {
-      user.outing.status = 'home'
-      user.outing.cardId = next._id
-      user.outing.homeSince = Date.now()
-      user.outing.homeDuration = randBetween(DURATIONS.homeMin, DURATIONS.homeMax)
-    } else {
-      user.outing.status = 'idle'
-      user.outing.cardId = ''
-    }
+    resetHomeOuting(user, user.displayCardId)
+  }
+  if (cloudRoom && !String(user.displayCardId || '').startsWith('card_')) {
+    user.displayCardId = cloudRoom.displayCardId
+    user.roomMateIds = normalizeMateIds(
+      [...cloudRoom.roomMateIds, ...user.roomMateIds.filter((id) => id.startsWith('card_'))],
+      user.displayCardId
+    )
+  }
+  if (cloudRelease && user.outing.cardId === cardId) {
+    user.outing.status = 'idle'
+    resetHomeOuting(user, user.displayCardId)
   }
 
   // 记忆保留在库里，图鉴不再展示这只猫
@@ -722,7 +767,7 @@ async function adoptVisitor({ visitId, geo, placeText } = {}) {
   const openid = getOpenId()
   ensureUser(db, openid)
   const visit = db.visits.find((v) => v._id === visitId && v.hostOpenId === openid)
-  if (!visit || visit.status !== 'active') throw new Error('小猫已经走了')
+  if (!visit || visit.status !== 'active' || Date.now() >= visit.leaveAt) throw new Error('小猫已经走了')
   if (!visit.fromReleased || !visit.releasedId) throw new Error('这只不是放生猫')
 
   const released = (db.released || []).find((r) => r._id === visit.releasedId)
@@ -875,15 +920,15 @@ function visitSig(db, openid) {
     .join('|')
 }
 
-function runOutingTick(db, openid, now = Date.now()) {
+function runOutingTick(db, openid, now = Date.now(), { mockVisitors = true } = {}) {
   const user = ensureUser(db, openid)
   const beforeOuting = JSON.stringify(user.outing || null)
   const beforeVisits = visitSig(db, openid)
   const beforeLogs = db.outingLogs.length
   const beforeSpawn = user._lastMockVisitorAt || 0
 
-  expireVisits(db, now)
   applyMockHostInteractions(db, now)
+  expireVisits(db, now)
 
   const displayCard = user.displayCardId
     ? db.cards.find((c) => c._id === user.displayCardId && c._openid === openid)
@@ -893,18 +938,14 @@ function runOutingTick(db, openid, now = Date.now()) {
     user,
     now,
     getDisplayCard: () => displayCard || null,
+    getOutingCard: (id) => db.cards.find((card) => card._id === id && card._openid === openid),
     createVisitToHost: (payload) => createVisitToHostLocal(db, openid, payload),
+    getVisit: (id) => id && db.visits.find((visit) => visit._id === id && visit.ownerOpenId === openid),
     onReturnHome: (log) => {
       db.outingLogs.unshift({
         _id: uid('olog'),
         _openid: openid,
-        cardId: log.cardId,
-        distanceKm: log.distanceKm,
-        behaviorText: log.behaviorText,
-        pet: !!log.pet,
-        fed: !!log.fed,
-        leftAt: log.leftAt,
-        returnedAt: log.returnedAt
+        ...log
       })
       // 小屋串门总账：我去串门
       const guestCard =
@@ -912,15 +953,10 @@ function runOutingTick(db, openid, now = Date.now()) {
       pushVisitLog(db, {
         _openid: openid,
         direction: 'outbound',
-        cardId: log.cardId || '',
+        ...log,
         breed: (guestCard && guestCard.breed) || '小猫',
         name: (guestCard && guestCard.name) || '',
-        cutoutPath: (guestCard && (guestCard.cutoutPath || guestCard.cutoutFileId)) || '',
-        behaviorText: log.behaviorText || '',
-        distanceKm: log.distanceKm || 0,
-        pet: !!log.pet,
-        fed: !!log.fed,
-        leftAt: log.leftAt,
+        cutoutPath: log.catImage,
         leaveAt: log.returnedAt,
         at: log.returnedAt || now
       })
@@ -935,7 +971,7 @@ function runOutingTick(db, openid, now = Date.now()) {
     }
   })
 
-  maybeSpawnMockVisitor(db, openid, now)
+  if (mockVisitors) maybeSpawnMockVisitor(db, openid, now)
   expireVisits(db, now)
 
   const dirty =
@@ -948,12 +984,14 @@ function runOutingTick(db, openid, now = Date.now()) {
   return dirty
 }
 
-async function getRoomState() {
+async function getRoomState({ cloudMode = false } = {}) {
   const db = load()
   const openid = getOpenId()
   const user = ensureUser(db, openid)
   const now = Date.now()
-  const dirtyOuting = runOutingTick(db, openid, now)
+  const trackedId = outingEngine.isAway(user.outing) ? user.outing.cardId : user.displayCardId
+  const advanceOuting = !cloudMode || String(trackedId || '').startsWith('card_')
+  const dirtyOuting = advanceOuting && runOutingTick(db, openid, now, { mockVisitors: !cloudMode })
 
   // 弱状态离线衰减
   const prevCare = JSON.stringify(user.care || null)
@@ -993,8 +1031,8 @@ async function getRoomState() {
         ? 'home'
         : 'none'
 
-  const activeVisitor = db.visits.find((v) => v.hostOpenId === openid && v.status === 'active')
-  const leftVisitor = !activeVisitor
+  const activeVisitor = !cloudMode && db.visits.find((v) => v.hostOpenId === openid && v.status === 'active')
+  const leftVisitor = !cloudMode && !activeVisitor
     ? db.visits
         .filter((v) => v.hostOpenId === openid && v.status === 'left' && !v.seenLeft)
         .sort((a, b) => b.leaveAt - a.leaveAt)[0]
@@ -1019,6 +1057,7 @@ async function getRoomState() {
     visitor: activeVisitor
       ? {
           id: activeVisitor._id,
+          source: 'local',
           breed: activeVisitor.breed,
           cutoutPath: activeVisitor.cutoutPath,
           behaviorText: activeVisitor.behaviorText,
@@ -1042,7 +1081,7 @@ async function getRoomState() {
 }
 
 /** 对本猫互动：摸头 / 喂食 / 玩耍 / 哄睡；同步涨该猫亲密度 */
-async function careCat({ action, cardId }) {
+async function careCat({ action, cardId, useCloudOuting }) {
   const db = load()
   const openid = getOpenId()
   const user = ensureUser(db, openid)
@@ -1057,7 +1096,7 @@ async function careCat({ action, cardId }) {
     err.code = 'NO_DISPLAY'
     throw err
   }
-  if (outingCardId && targetId === outingCardId) {
+  if (outingCardId && targetId === outingCardId && (!useCloudOuting || targetId.startsWith('card_'))) {
     const err = new Error('它还在外面呢')
     err.code = 'CAT_AWAY'
     throw err
@@ -1069,12 +1108,7 @@ async function careCat({ action, cardId }) {
     if (user.displayCardId) mates.unshift(user.displayCardId)
     user.displayCardId = targetId
     user.roomMateIds = normalizeMateIds(mates, targetId)
-    if (!outingActive) {
-      user.outing.status = 'home'
-      user.outing.cardId = targetId
-      user.outing.homeSince = Date.now()
-      user.outing.homeDuration = randBetween(DURATIONS.homeMin, DURATIONS.homeMax)
-    }
+    resetHomeOuting(user, targetId)
   }
   const { care, toast } = careEngine.applyAction(user.care || careEngine.DEFAULT_CARE, action, now)
   user.care = care
@@ -1123,7 +1157,7 @@ async function interactVisitor({ visitId, action }) {
   const openid = getOpenId()
   const user = ensureUser(db, openid)
   const visit = db.visits.find((v) => v._id === visitId && v.hostOpenId === openid)
-  if (!visit || visit.status !== 'active') throw new Error('visitor gone')
+  if (!visit || visit.status !== 'active' || Date.now() >= visit.leaveAt) throw new Error('小猫已经走了')
 
   if (action === 'pet') {
     if (visit.petByHost) return { visit, toast: '' }
@@ -1433,6 +1467,7 @@ async function createCard(payload) {
     _openid: openid,
     cutoutPath: payload.cutoutPath || '',
     originalPath: payload.originalPath || '',
+    photoIdentities: appendIdentity([], normalizePhotoIdentity(payload.photoIdentity)),
     breed,
     recognizedBreed,
     pendingBreed,
@@ -1804,15 +1839,18 @@ async function createMemory(payload) {
   const openid = getOpenId()
   const card = db.cards.find((c) => c._id === payload.cardId && c._openid === openid)
   if (!card) throw new Error('card not found')
+  const identity = normalizePhotoIdentity(payload.photoIdentity)
   const memory = {
     _id: uid('mem'),
     _openid: openid,
     cardId: payload.cardId,
     text: clampText(payload.text || '', 200),
     imagePath: payload.imagePath || '',
+    imageFileId: payload.imageFileId || '',
     createdAt: Date.now()
   }
   db.memories.push(memory)
+  if (identity) card.photoIdentities = appendIdentity(card.photoIdentities, identity)
   recomputeStats(db, openid)
   save(db)
   return { memory }

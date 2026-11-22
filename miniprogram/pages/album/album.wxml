@@ -9,8 +9,6 @@
       <view class="nav-link" hover-class="tap-press" catchtap="onReleased" aria-role="button" aria-label="我放生的猫">放生记录</view>
     </view>
   </view>
-  <view wx:if="{{showDebug}}" class="debug-btn" style="top: {{debugTop}}px;" bindtap="onToggleDebug">{{debugLabel}}</view>
-
   <view class="page album-page" style="padding-top: {{navPad}}px;">
     <!-- 有猫 -->
     <block wx:if="{{ready && hasCats}}">

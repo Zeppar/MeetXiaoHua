@@ -44,10 +44,25 @@ function roomOccupancy(user) {
   }
 }
 
+function resolveHomeCards(user, cards, outingCardId, preferredCard) {
+  const byId = new Map((cards || []).filter(Boolean).map((card) => [card._id, card]))
+  if (preferredCard && preferredCard._id) byId.set(preferredCard._id, preferredCard)
+  const homeCards = roomOccupancy(user).ids
+    .filter((id) => id !== outingCardId)
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+  const displayCard = homeCards.find((card) => preferredCard && card._id === preferredCard._id) || homeCards[0] || null
+  return {
+    displayCard,
+    mateIds: displayCard ? homeCards.filter((card) => card !== displayCard).map((card) => card._id) : []
+  }
+}
+
 module.exports = {
   ROOM_CAPACITY,
   ROOM_MATE_LIMIT,
   normalizeRoomIds,
   normalizeMateIds,
-  roomOccupancy
+  roomOccupancy,
+  resolveHomeCards
 }
