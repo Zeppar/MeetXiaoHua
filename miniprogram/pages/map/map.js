@@ -771,10 +771,11 @@ Page({
     this.setData(patch)
   },
 
+  /** 拿不到定位返回 null；DEFAULT_CENTER 只用于地图显示，不能当成真实位置写进猫卡 */
   getUserLocation() {
     if (!this._locationRequest) {
       this._locationRequest = getCurrentPosition()
-        .then((loc) => loc || { ...DEFAULT_CENTER })
+        .then((loc) => loc || null)
         .finally(() => {
           this._locationRequest = null
         })
