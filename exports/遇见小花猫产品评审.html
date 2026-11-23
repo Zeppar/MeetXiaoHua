@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>遇见小花猫产品评审</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
+<style>
+/* 版式：沿用项目「猫咪相遇手帐」设计规范 —— 点阵纸底、单栏阅读、橡皮章标优先级、语义色（橙=行动 薄荷=好 天蓝=参考 樱粉=情感） */
+:root{
+  --paper:#fbf7f0; --paper-deep:#f4ede2; --card:#fffdf9;
+  --ink:#2b2622; --text:#4a423b; --text-2:#6b6158; --muted:#7a6e63;
+  --line:rgba(120,95,70,.16); --dot:rgba(120,95,70,.10);
+  --orange:#f08a4b; --orange-ink:#b8551f; --orange-soft:#fdebdd;
+  --mint-ink:#2f7d5c; --mint-soft:#e4f4ec;
+  --sky-ink:#3a6ea8; --sky-soft:#e6f0fb;
+  --blush-ink:#b8506a; --blush-soft:#fdebef;
+  --note:#fff3c4; --danger:#c0443f; --danger-soft:#fbe6e4;
+  --font-body:"Noto Sans SC","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",sans-serif;
+  --font-display:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#1f1b18; --paper-deep:#29241f; --card:#2a2521;
+  --ink:#f3ece4; --text:#e2d8cd; --text-2:#c4b8ab; --muted:#a99c8f;
+  --line:rgba(240,220,200,.14); --dot:rgba(240,220,200,.07);
+  --orange:#f39a62; --orange-ink:#f6ad7e; --orange-soft:#3d2a1e;
+  --mint-ink:#8fd3b3; --mint-soft:#1f3329;
+  --sky-ink:#a3c6ef; --sky-soft:#1e2a38;
+  --blush-ink:#f2a7b5; --blush-soft:#3a2229;
+  --note:#4a4024; --danger:#f08a85; --danger-soft:#3d2120; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#1f1b18; --paper-deep:#29241f; --card:#2a2521;
+  --ink:#f3ece4; --text:#e2d8cd; --text-2:#c4b8ab; --muted:#a99c8f;
+  --line:rgba(240,220,200,.14); --dot:rgba(240,220,200,.07);
+  --orange:#f39a62; --orange-ink:#f6ad7e; --orange-soft:#3d2a1e;
+  --mint-ink:#8fd3b3; --mint-soft:#1f3329;
+  --sky-ink:#a3c6ef; --sky-soft:#1e2a38;
+  --blush-ink:#f2a7b5; --blush-soft:#3a2229;
+  --note:#4a4024; --danger:#f08a85; --danger-soft:#3d2120; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{
+  background:radial-gradient(var(--dot) 1.2px,transparent 1.4px) 0 0/16px 16px,var(--paper);
+  color:var(--text); font:15px/1.75 var(--font-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:32px 64px;
+}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{font-family:var(--font-display);color:var(--ink);text-wrap:balance;margin:0;line-height:1.3}
+h1{font-size:clamp(28px,5vw,40px);font-weight:900;letter-spacing:.01em}
+h2{font-size:24px;font-weight:900}
+h3{font-size:17px;font-weight:700}
+p{margin:0;max-width:65ch}
+a{color:var(--orange-ink);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--orange);outline-offset:2px;border-radius:4px}
+code{font-family:var(--font-mono);font-size:.88em;background:var(--paper-deep);padding:1px 6px;border-radius:6px;color:var(--ink);word-break:break-all}
+section{display:flex;flex-direction:column;gap:20px}
+.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--muted);font-weight:500}
+.lede{font-size:17px;color:var(--text)}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+/* 封面 */
+header.cover{display:flex;flex-direction:column;gap:16px;padding-top:8px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px;color:var(--muted)}
+.verdict{background:var(--note);color:var(--ink);padding:20px 22px;border-radius:4px 18px 6px 16px;
+  box-shadow:0 10px 24px rgba(90,60,30,.10);transform:rotate(-.4deg);font-size:16px;line-height:1.8;position:relative}
+.verdict::before{content:"";position:absolute;top:-10px;left:28px;width:84px;height:20px;background:rgba(240,138,75,.35);transform:rotate(-3deg);border-radius:2px}
+.verdict strong{color:var(--orange-ink)}
+.toc{display:flex;flex-wrap:wrap;gap:8px}
+.toc a{font-size:13px;text-decoration:none;color:var(--text-2);border:1px solid var(--line);background:var(--card);padding:4px 12px;border-radius:999px}
+.toc a:hover{border-color:var(--orange);color:var(--orange-ink)}
+
+/* 流程 */
+.loop{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.step{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 12px;font-size:14px;color:var(--ink)}
+.arrow{color:var(--muted);font-size:13px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:640px){.split{grid-template-columns:1fr}}
+.pane{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.pane ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
+.pane.good h3{color:var(--mint-ink)}
+.pane.risk h3{color:var(--orange-ink)}
+
+/* 表格 */
+.table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:12px 14px;border-bottom:1px dashed var(--line)}
+th{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:500;background:var(--paper-deep)}
+tr:last-child td{border-bottom:0}
+td strong{color:var(--ink)}
+.ours td{background:var(--orange-soft)}
+.callout{border-left:3px solid var(--sky-ink);background:var(--sky-soft);padding:14px 18px;border-radius:0 12px 12px 0;color:var(--text)}
+.callout strong{color:var(--ink)}
+
+/* 建议卡 */
+.recs{display:flex;flex-direction:column;gap:14px}
+.rec{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px;display:grid;grid-template-columns:auto 1fr;gap:6px 16px}
+.rec .body{display:flex;flex-direction:column;gap:8px;min-width:0}
+.rec dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px}
+.rec dt{font-size:12px;color:var(--muted);padding-top:3px;white-space:nowrap}
+.rec dd{margin:0;min-width:0}
+.seal{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:13px;letter-spacing:.04em;
+  border:2px solid currentColor;transform:rotate(-8deg);font-family:var(--font-display);line-height:1.1;text-align:center}
+.seal.p0{color:var(--danger);background:var(--danger-soft)}
+.seal.p1{color:var(--orange-ink);background:var(--orange-soft)}
+.seal.p2{color:var(--sky-ink);background:var(--sky-soft)}
+.seal.p3{color:var(--muted);background:var(--paper-deep)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--text-2);align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend .seal{width:30px;height:30px;font-size:10px;border-width:1.5px}
+
+/* 对比度色板（真实色值，故意不随主题变化） */
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.sw{border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:6px;border:1px solid var(--line)}
+.sw .sample{font-size:15px;font-weight:500}
+.sw .ratio{font-family:var(--font-mono);font-size:13px}
+.sw .verdict-tag{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;align-self:flex-start}
+.fail{background:#fbe6e4;color:#8f2a26}
+.pass{background:#e4f4ec;color:#2f7d5c}
+.sw-a{background:#fbf7f0;color:#9a8f84}
+.sw-b{background:#e8743a;color:#ffffff}
+.sw-c{background:#fbf7f0;color:#7a6e63}
+.sw-d{background:#b8551f;color:#ffffff}
+.sw .ratio,.sw .note{color:inherit;opacity:.95}
+.sw .note{font-size:12px}
+
+/* 路线 */
+.road{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media (max-width:720px){.road{grid-template-columns:1fr 1fr}}
+@media (max-width:420px){.road{grid-template-columns:1fr}}
+.phase{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.phase .when{font-size:12px;color:var(--orange-ink);font-weight:700;letter-spacing:.06em}
+.phase ul{margin:0;padding-left:1.1em;font-size:14px;display:flex;flex-direction:column;gap:4px}
+
+.sources{font-size:13px;columns:2;column-gap:28px;padding-left:1.1em;margin:0}
+@media (max-width:640px){.sources{columns:1}}
+.sources li{break-inside:avoid;margin-bottom:4px}
+footer{font-size:12px;color:var(--muted);border-top:1px dashed var(--line);padding-top:16px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@page{size:A4;margin:14mm 12mm}
+@media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{padding:0;font-size:13px}
+  .wrap{gap:36px;max-width:none}
+  .toc{display:none}
+  .verdict{transform:none;box-shadow:none}
+  .rec,.pane,.phase,.sw,tr,.callout{break-inside:avoid}
+  h2,h3{break-after:avoid}
+  .table-scroll{overflow:visible}
+  table{min-width:0;font-size:12px}
+  a{text-decoration:none}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="cover">
+  <div class="eyebrow">MEETXIAOHUA · 产品与 UI 评审</div>
+  <h1>遇见小花猫：做减法，转向「熟面孔」</h1>
+  <div class="meta"><span>评审范围：release 分支（含提交 09a01fa）</span><span>2026 年 11 月</span><span>微信小程序 + 微信云开发</span></div>
+  <div class="verdict">
+    视觉系统和产品气质在同类产品里少见，但<strong>功能概念太多</strong>，「线下拍猫」和「线上小屋」两套玩法几乎没连上。
+    下一步最该做的是减法，把产品重心从<strong>收集品种</strong>转到<strong>再次遇见同一只猫</strong>。
+    团队已经做出来的查重和 DINOv2 识猫，正好是这次转向的技术底子。
+  </div>
+  <nav class="toc" aria-label="目录">
+    <a href="#now">现状</a><a href="#market">竞品</a><a href="#product">产品方向</a><a href="#ui">UI</a><a href="#reid">识猫方案</a><a href="#roadmap">推进顺序</a><a href="#sources">资料来源</a>
+  </nav>
+</header>
+
+<section id="now">
+  <div class="eyebrow">现状速写</div>
+  <h2>核心流程</h2>
+  <div class="loop" role="list">
+    <span class="step" role="listitem">街上拍到猫</span><span class="arrow">→</span>
+    <span class="step" role="listitem">抠成白边贴纸卡</span><span class="arrow">→</span>
+    <span class="step" role="listitem">进图鉴（按品种计进度）</span><span class="arrow">→</span>
+    <span class="step" role="listitem">记到足迹地图</span><span class="arrow">→</span>
+    <span class="step" role="listitem">放进小屋（最多 3 只）</span><span class="arrow">→</span>
+    <span class="step" role="listitem">出门串门，寄回明信片</span><span class="arrow">→</span>
+    <span class="step" role="listitem">别人的猫来访 · 放生 / 收养</span><span class="arrow">→</span>
+    <span class="step" role="listitem">再遇见时存进「记忆」</span>
+  </div>
+  <div class="split">
+    <div class="pane good">
+      <h3>做得好的</h3>
+      <ul>
+        <li><strong>视觉系统完整</strong>：颜色语义、胶带、邮戳、橡皮章、明信片都有规范文档，品牌辨识度高。</li>
+        <li><strong>隐私意识好</strong>：位置模糊到街区，只有自己能看到。</li>
+        <li><strong>异步陪伴有分寸</strong>：出门和明信片借鉴了《旅行青蛙》的「等待 + 惊喜」，不逼用户每天上线。</li>
+      </ul>
+    </div>
+    <div class="pane risk">
+      <h3>主要风险</h3>
+      <ul>
+        <li>概念超过 13 个：图鉴、小屋、出门、来访、放生、收养、记忆、足迹、明信片、家具、背景解锁、护理、品种审核。</li>
+        <li>拍猫是线下低频行为，小屋是线上高频行为，两者之间只靠「解锁背景」相连。</li>
+        <li>街上大多是田园猫、狸花、橘猫，按品种算收集进度很快就会卡住。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="market">
+  <div class="eyebrow">竞品格局</div>
+  <h2>谁在做相近的事</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>类型</th><th>代表产品</th><th>和我们的关系</th><th>可借鉴</th></tr></thead>
+      <tbody>
+        <tr><td><strong>街猫收集游戏</strong><br><span class="muted small">海外热门</span></td><td>Cat Collector、Meowdex、PoCats、CatchCat、Chonk Finder</td><td>最直接的竞品：拍真猫 → 收集成卡 → 显示在地图上</td><td>Cat Collector 的每日小游戏和宝石节奏；Meowdex 只上传抠图、原图留在本机；CatchCat 的稀有度和对战</td></tr>
+        <tr><td><strong>个体识别 / 熟面孔</strong></td><td>Catdex（开源）、MeetCats 喵出没、中大猫谱</td><td>都在回答「这是哪一只」，而不是「这是什么品种」</td><td>从照片认出同一只猫，记录每次目击和剪耳（绝育标记）状态</td></tr>
+        <tr><td><strong>国内已上架 App</strong></td><td>Mewhere</td><td>拍照识别、流浪猫档案、日历切地图</td><td>同一批记录用日历和地图两种视角浏览</td></tr>
+        <tr><td><strong>社区猫谱</strong></td><td>中大猫谱及各高校猫谱小程序</td><td>验证了「一群人共同维护猫档案」的需求</td><td>共建档案、公告、救助信息</td></tr>
+        <tr><td><strong>异步养成</strong></td><td>旅行青蛙、Neko Atsume（猫咪后院）</td><td>小屋和出门玩法就是这条路</td><td>等待感、随机明信片、「猫只在你不在时来」</td></tr>
+        <tr><td><strong>云养猫</strong></td><td>街猫（智能猫屋 + 直播 + 云投喂）</td><td>公益加线上陪伴，靠用户打赏抽成</td><td>「线上互动能真实帮到街猫」的动机很强，但商业模式有争议</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout"><strong>我们的空位：</strong>海外竞品基本是「宝可梦式收集 + 竞争」，国内多是「救助 / 档案工具」。「真实相遇 + 情感手帐 + 异步陪伴」这个组合目前没人做，值得守住。如果继续往「品种收集」走，就会落进 Cat Collector 们已有先发优势的赛道。</div>
+</section>
+
+<section id="product">
+  <div class="eyebrow">产品方向</div>
+  <h2>八条建议，按优先级</h2>
+  <div class="legend" aria-label="优先级图例">
+    <span><span class="seal p0">P0</span>先做</span><span><span class="seal p1">P1</span>近期</span><span><span class="seal p2">P2</span>中期</span><span><span class="seal p3">P3</span>留口子</span>
+  </div>
+  <div class="recs">
+    <article class="rec"><div class="seal p0">P0</div><div class="body">
+      <h3>从「品种图鉴」转向「个体档案 · 熟面孔」</h3>
+      <dl><dt>原因</dt><dd>街猫品种单一，品种收集很快卡住，用解锁背景作奖励等于惩罚真实使用。真正打动人的是「又见到它了」，MeetCats、Catdex 都押在这里。我们已经在 <code>cat-identity.js</code> 里做了照片指纹、感知哈希和 DINOv2 特征比对。</dd>
+      <dt>怎么做</dt><dd>图鉴按「每一只猫」组织，每只猫一条「第 N 次遇见」时间线；收集维度改成遇见次数、认识天数、它的地盘；品种降为普通标签。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p0">P0</div><div class="body">
+      <h3>砍掉或简化「品种审核」</h3>
+      <dl><dt>原因</dt><dd>审核需要人工运营，对用户价值低。而且卡片详情页的「通过审核（调试）」按钮（<code>card-detail.wxml:35</code>）对所有用户可见；云端没配置 <code>ADMIN_OPENIDS</code> 时，用户还能自己审核通过自己的卡，这个流程实际在空转。</dd>
+      <dt>怎么做</dt><dd>品种让用户自己改、不审核，或只并列展示「识别结果」和「用户选择」两个字段。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p1">P1</div><div class="body">
+      <h3>把线下拍猫和线上小屋连起来</h3>
+      <dl><dt>原因</dt><dd>两套玩法之间只靠「解锁背景」相连，太弱。</dd>
+      <dt>怎么做</dt><dd>真实再遇见时，这只猫在小屋的亲密度大涨或解锁专属动作，小屋里的互动只给少量亲密度；明信片写「它最近常在 XX 街区出没」（用模糊过的足迹），给用户出门找它的理由；四条护理属性简化成一个亲密度加随机小事件，避免冲淡「真实街猫」的定位。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p1">P1</div><div class="body">
+      <h3>减少一半概念，缩短新手路径</h3>
+      <dl><dt>原因</dt><dd>小程序用户「用完即走」，首次体验要在 30 秒内拿到「贴纸卡」这个高光时刻。</dd>
+      <dt>怎么做</dt><dd>首屏只留「拍一只猫」；小屋等用户有 2 只猫后再解锁；放生、收养藏进次级入口。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p1">P1</div><div class="body">
+      <h3>定位改为可选</h3>
+      <dl><dt>原因</dt><dd>现在的文案是「不开定位就无法保存这只猫」，在保存这一步把用户挡住，转化损失大；微信对强制索取隐私权限审核也严。</dd>
+      <dt>怎么做</dt><dd>没有定位也能保存，事后补地点；地图上用「未标注地点」分组展示。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p2">P2</div><div class="body">
+      <h3>用微信社交链代替「模拟邻居」</h3>
+      <dl><dt>原因</dt><dd>用户量少时，串门大多是跟 <code>mock_</code> 模拟主人。小程序最大的优势是分享卡片和群聊，旅行青蛙就是靠晒明信片传播开的。</dd>
+      <dt>怎么做</dt><dd>明信片和猫卡做成可分享的卡片或海报；「让我的猫去好友家串门」改成邀请制；中长期做「小区 / 校园猫谱」共建空间，位置照样模糊化。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p2">P2</div><div class="body">
+      <h3>改「放生 / 收养」的说法</h3>
+      <dl><dt>原因</dt><dd>面对真实流浪猫，「收养」容易被理解成真的领养，「放生」听起来像在说真猫。</dd>
+      <dt>怎么做</dt><dd>改成明确指向卡片的说法，如「送它去流浪 / 收下它的卡片」，或把机制换成「交换猫卡」。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p3">P3</div><div class="body">
+      <h3>商业化留好口子</h3>
+      <dl><dt>方向</dt><dd>家具、背景、明信片皮肤等外观付费；把自己的猫贴纸印成实体贴纸或明信片（最贴合手帐调性）；公益联动，把用户行为换算成对街猫投喂或绝育的捐赠，避开街猫打赏抽成的争议。</dd></dl>
+    </div></article>
+  </div>
+</section>
+
+<section id="ui">
+  <div class="eyebrow">UI</div>
+  <h2>六条 UI 建议</h2>
+
+  <article class="rec"><div class="seal p0">P0</div><div class="body">
+    <h3>对比度不达标</h3>
+    <p>次要文字和主按钮都没达到 WCAG AA 的正文要求（4.5 : 1）。最小字号 20rpx 约等于 10px，户外阳光下更难看清，而拍猫恰恰在户外。下面是真实色值的对照：</p>
+    <div class="swatches">
+      <div class="sw sw-a"><span class="sample">次要文字 #9a8f84</span><span class="ratio">2.9 : 1</span><span class="verdict-tag fail">不达标</span><span class="note">现在的 --color-muted</span></div>
+      <div class="sw sw-b"><span class="sample">白字 · 按钮 #e8743a</span><span class="ratio">3.0 : 1</span><span class="verdict-tag fail">不达标</span><span class="note">渐变较浅的一端 #f7a56e 更低</span></div>
+      <div class="sw sw-c"><span class="sample">次要文字 #7a6e63</span><span class="ratio">4.7 : 1</span><span class="verdict-tag pass">达标</span><span class="note">建议的新 muted</span></div>
+      <div class="sw sw-d"><span class="sample">白字 · 按钮 #b8551f</span><span class="ratio">4.8 : 1</span><span class="verdict-tag pass">达标</span><span class="note">即现有 --color-primary-ink</span></div>
+    </div>
+    <p class="muted small">另一种做法：保留橙色按钮底，文字改成暖黑 #2b2622（约 6 : 1）。正文最小字号建议收到 24rpx。</p>
+  </div></article>
+
+  <div class="recs">
+    <article class="rec"><div class="seal p1">P1</div><div class="body">
+      <h3>拍照保存的流程太长</h3>
+      <dl><dt>现状</dt><dd>拍照 → 抠图 → 查重（最长约 7.5 秒）→ 备注弹窗 → 地点弹窗 → 定位 → 保存，中间被打断三次。</dd>
+      <dt>建议</dt><dd>拍完直接出贴纸卡，点一次「收下」就保存；备注、地点之后在详情里补；查重放后台跑，用一条轻提示告诉用户「这可能是你认识的 XX」。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p1">P1</div><div class="body">
+      <h3>地图设置面板太偏开发者</h3>
+      <dl><dt>现状</dt><dd>「最小 / 最大缩放级别」「最大倾角」「3D 楼块」都是调试参数。</dd>
+      <dt>建议</dt><dd>只留「平面 / 立体 / 卫星」两三个预设，其余参数收进开发版。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p2">P2</div><div class="body">
+      <h3>小屋页信息太密</h3>
+      <dl><dt>现状</dt><dd><code>room.wxml</code> 416 行，同一场景叠了护理条、家具、访客、报告、出门状态和工具栏。</dd>
+      <dt>建议</dt><dd>每个状态只突出一个焦点：有访客时访客是主角、护理条收起；家具编辑做成单独模式。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p2">P2</div><div class="body">
+      <h3>手写字体在不同手机上不一致</h3>
+      <dl><dt>现状</dt><dd><code>--font-hand</code> 依赖系统楷体，安卓会退回宋体，「手写感」在一半用户手机上不存在。</dd>
+      <dt>建议</dt><dd>用 <code>wx.loadFontFace</code> 加载手写字体的常用字子集，或改用颜色和便签纸底表达「手写」。</dd></dl>
+    </div></article>
+
+    <article class="rec"><div class="seal p3">P3</div><div class="body">
+      <h3>视觉统一的小清理</h3>
+      <dl><dt>清单</dt><dd><code>app.json</code> 里 tabBar 选中色还是绿色 <code>#22C26A</code>，和品牌色不一致；<code>assets/illus</code> 下 4 张 AI 3D 黏土风位图已无引用（约 150KB），另外两张只剩调试样例在用，和「只用扁平 SVG」的规范矛盾；小屋「推进」按钮由常量 <code>DEBUG_FAST = true</code> 控制，建议和详情页调试按钮一起统一改用 <code>isDevBuild()</code>。</dd></dl>
+    </div></article>
+  </div>
+</section>
+
+<section id="reid">
+  <div class="eyebrow">识猫方案</div>
+  <h2>中大猫谱的猫脸识别，比我们的好吗？</h2>
+  <p class="lede">简短回答：<strong>不适合拿来替换我们的方案</strong>，它解决的是另一个问题。但它点出了我们的短板：现有比对认不出换了角度的同一只猫。开源界有更合适的个体识别模型，用之前要注意许可证。</p>
+
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th></th><th>中大猫谱 cat-face</th><th>我们现在（release）</th></tr></thead>
+      <tbody>
+        <tr><td><strong>问题类型</strong></td><td>封闭集分类：从一份固定的已知猫名单里选</td><td>开放集检索：判断是不是用户见过的猫，见不到就是新猫</td></tr>
+        <tr><td><strong>流程</strong></td><td>YOLOv5 框出猫 → DenseNet121 分类（128px；找不到猫时用 224px 全图模型兜底）→ 返回前 20 个候选</td><td>文件 SHA-1 精确比对 + 全图 / 抠图感知哈希 + 颜色统计；可选 DINOv2-S 384 维特征，余弦 ≥ 0.8 算候选；返回前 3 个由用户确认</td></tr>
+        <tr><td><strong>每只猫需要</strong></td><td>至少 10 张高质量照片</td><td>1 张即可</td></tr>
+        <tr><td><strong>加入新猫</strong></td><td>要用 GPU 重新训练整个模型</td><td>不需要训练</td></tr>
+        <tr><td><strong>「没见过」怎么判断</strong></td><td>不判断，总会返回已知猫的排名</td><td>低于阈值就当新猫</td></tr>
+        <tr><td><strong>适合谁</strong></td><td>猫群固定、有管理员维护照片的校园</td><td>每个用户各自的猫，新猫不断出现</td></tr>
+        <tr class="ours"><td><strong>短板</strong></td><td>不支持我们的「每人一本手帐」场景；分类网络没加载预训练权重，依赖大量照片</td><td>线上默认没开特征比对（<code>CAT_REID_ENABLED</code>），实际只能认出几乎相同的照片；DINOv2 是通用特征，两只橘猫也会很像；0.8 阈值没用真实数据校准过</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>更合适的开源选择</h3>
+  <div class="recs">
+    <article class="rec"><div class="seal p1">候选</div><div class="body">
+      <h3>MegaDescriptor（WildlifeDatasets）</h3>
+      <dl><dt>是什么</dt><dd>专门在多种动物个体识别数据集上训练的特征模型（Swin 结构），输出用于「是不是同一只」的特征向量，正好是开放集检索。配套工具包 wildlife-tools 带特征提取、相似度计算，还有把全局特征和局部特征点匹配结合起来的 WildFusion。</dd>
+      <dt>注意</dt><dd>许可证是 <strong>CC BY-NC 4.0（不可商用）</strong>。L-384 版约 2.3 亿参数、权重约 1.9GB，CPU 推理偏重；合集里还有 L-224 等其他版本。适合拿来做离线对照基准，上线商用要另找方案。</dd></dl>
+    </div></article>
+    <article class="rec"><div class="seal p2">参考</div><div class="body">
+      <h3>PPGNet-Cat</h3>
+      <dl><dt>是什么</dt><dd>针对野外流浪猫红外相机照片的个体识别，用余弦相似度比较特征，公开了模型权重。</dd>
+      <dt>注意</dt><dd>训练数据不公开，场景是相机陷阱而不是手机近拍，需要在我们自己的照片上实测。</dd></dl>
+    </div></article>
+    <article class="rec"><div class="seal p0">推荐</div><div class="body">
+      <h3>DINOv2 微调 + 位置先验（我们自己的路线）</h3>
+      <dl><dt>为什么</dt><dd>DINOv2 是 Apache-2.0 许可，可以商用，而且已经接进了 <code>rembg-server.py</code> 的 <code>/api/embed</code>。用户每次在「它在图鉴里吗？」里点确认，都是一条免费的「同一只猫」标注，越用越准。</dd>
+      <dt>加一层</dt><dd>MeetCats 的做法：同一只猫通常活动在同一个街区。用已经模糊过的足迹给候选加权，成本很低，误认会明显减少。</dd></dl>
+    </div></article>
+  </div>
+
+  <div class="callout"><strong>建议的验证步骤：</strong>
+    ① 先建一个小评测集，比如 30 到 50 只猫、每只 3 到 5 张不同角度的照片，量出 Top-1 / Top-3 命中率和误认率；
+    ② 在线上打开特征比对，用评测集校准阈值，并加上位置先验；
+    ③ 离线对比 MegaDescriptor 和 DINOv2，看差距有多大；
+    ④ 用用户确认积累的数据，对 DINOv2 做度量学习微调（如 ArcFace 或三元组损失）。
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="eyebrow">推进顺序</div>
+  <h2>先修小的，再改方向</h2>
+  <div class="road">
+    <div class="phase"><span class="when">马上 · 1 天</span><ul><li>调试按钮只在开发版显示</li><li>修对比度</li><li>tabBar 颜色</li><li>删无用位图</li></ul></div>
+    <div class="phase"><span class="when">短期 · 1–2 周</span><ul><li>拍照一步保存</li><li>定位改为可选</li><li>地图设置简化</li><li>明信片和猫卡可分享</li></ul></div>
+    <div class="phase"><span class="when">中期 · 1 个月</span><ul><li>图鉴按个体组织</li><li>熟面孔识别上线（评测集 + 阈值 + 位置先验）</li><li>简化品种审核</li><li>再遇见带动小屋亲密度</li></ul></div>
+    <div class="phase"><span class="when">长期</span><ul><li>好友串门邀请</li><li>小区 / 校园共建猫谱</li><li>DINOv2 微调</li><li>实体贴纸变现</li></ul></div>
+  </div>
+</section>
+
+<section id="sources">
+  <div class="eyebrow">资料来源</div>
+  <h2>参考链接</h2>
+  <ul class="sources">
+    <li><a href="https://github.com/sysucats/cat-face" target="_blank" rel="noopener">中大猫谱 cat-face（GitHub）</a></li>
+    <li><a href="https://zhuanlan.zhihu.com/p/657351720" target="_blank" rel="noopener">Laf &amp; 中大猫谱（知乎）</a></li>
+    <li><a href="https://github.com/WildlifeDatasets/wildlife-tools" target="_blank" rel="noopener">wildlife-tools（GitHub）</a></li>
+    <li><a href="https://huggingface.co/BVRA/MegaDescriptor-L-384" target="_blank" rel="noopener">MegaDescriptor-L-384（Hugging Face）</a></li>
+    <li><a href="https://github.com/victorcaquilpan/PPGNet-Cat" target="_blank" rel="noopener">PPGNet-Cat（GitHub）</a></li>
+    <li><a href="https://github.com/neoyuhui/catdex" target="_blank" rel="noopener">Catdex（GitHub）</a></li>
+    <li><a href="https://github.com/modelstudioai/modelstudioai.github.io/issues/148" target="_blank" rel="noopener">MeetCats 喵出没（外滩大会 2026）</a></li>
+    <li><a href="https://apps.apple.com/us/app/mewhere-%E7%8C%AB%E5%92%AA%E6%8B%8D%E7%85%A7%E8%AF%86%E5%88%AB%E8%AE%B0%E5%BD%95%E4%B8%8E%E6%B5%81%E6%B5%AA%E7%8C%AB%E6%A1%A3%E6%A1%88/id6773598010?l=zh-Hans-CN" target="_blank" rel="noopener">Mewhere（App Store）</a></li>
+    <li><a href="https://www.gadgetreview.com/?p=419027" target="_blank" rel="noopener">Cat Collector（GadgetReview）</a></li>
+    <li><a href="https://paradepets.com/pet-news/cat-collector-app-real-life-pokemon-go-for-cats" target="_blank" rel="noopener">Cat Collector（Parade Pets）</a></li>
+    <li><a href="https://meowdex.app/" target="_blank" rel="noopener">Meowdex</a></li>
+    <li><a href="https://play.google.com/store/apps/details?id=com.pocats.app" target="_blank" rel="noopener">PoCats（Google Play）</a></li>
+    <li><a href="https://en.androidguias.com/Catchcat--the-phenomenon-that-turns-your-walks-into-a-real-cat-hunt-in-the-style-of-Pokemon-Go/" target="_blank" rel="noopener">CatchCat（androidguias）</a></li>
+    <li><a href="https://www.chonkfinder.app/pokemon-go-for-cats" target="_blank" rel="noopener">Chonk Finder</a></li>
+    <li><a href="https://github.com/scorpio-nova/PetmonGo" target="_blank" rel="noopener">PetmonGo（GitHub）</a></li>
+    <li><a href="https://www.wikipedia.org/wiki/Neko_Atsume" target="_blank" rel="noopener">Neko Atsume（Wikipedia）</a></li>
+    <li><a href="https://m.huxiu.com/article/233062.html" target="_blank" rel="noopener">旅行青蛙设计分析（虎嗅）</a></li>
+    <li><a href="https://www.36kr.com/p/1722223706113" target="_blank" rel="noopener">旅行青蛙分析（36氪）</a></li>
+    <li><a href="https://www.bnext.com.tw/article/48018/tabikaeru-mobile-game-gamification" target="_blank" rel="noopener">旅行青蛙 gamification（数位时代）</a></li>
+    <li><a href="https://apps.apple.com/cn/app/id6446309235" target="_blank" rel="noopener">街猫（App Store）</a></li>
+    <li><a href="https://www.tmtpost.com/6857557.html" target="_blank" rel="noopener">街猫商业模式（钛媒体）</a></li>
+    <li><a href="https://www.bjnews.com.cn/detail/1704785588129972.html" target="_blank" rel="noopener">街猫报道（新京报）</a></li>
+  </ul>
+</section>
+
+<footer>基于 release 分支代码阅读和公开资料整理。对比度按 WCAG 相对亮度公式计算；竞品信息以各产品官方页面为准。</footer>
+</div>
+</body>
+</html>
