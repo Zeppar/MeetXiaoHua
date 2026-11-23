@@ -787,6 +787,82 @@
   flex-shrink: 0;
 }
 
+/* 底部焦点面板：明信片 / 来访 */
+.focus-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.focus-ico {
+  width: 88rpx;
+  height: 88rpx;
+  flex-shrink: 0;
+}
+
+.focus-cat {
+  width: 112rpx;
+  height: 112rpx;
+  flex-shrink: 0;
+}
+
+.focus-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.focus-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.focus-title {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--color-title);
+}
+
+.focus-sub {
+  font-size: var(--font-sm);
+  color: var(--color-text-2);
+}
+
+.focus-main {
+  margin-top: var(--space-3);
+}
+
+.focus-behavior {
+  margin-top: var(--space-2);
+}
+
+.focus .vs-ops.focus-ops {
+  margin-top: var(--space-3);
+}
+
+.focus-switch {
+  margin-top: var(--space-2);
+  padding: 12rpx 0 4rpx;
+  text-align: center;
+  font-size: var(--font-sm);
+  color: var(--color-text-2);
+}
+
+.focus-back {
+  align-self: flex-start;
+  display: inline-block;
+  margin-bottom: var(--space-2);
+  padding: 6rpx 20rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-ink);
+  font-size: var(--font-xs);
+}
+
 /* 摆家具托盘 */
 .tray-head {
   display: flex;
@@ -1128,4 +1204,42 @@
 @keyframes room-wiggle {
   0%, 100% { transform: rotate(-6deg); }
   50% { transform: rotate(6deg); }
+}
+
+/* 照顾面板：只看一个亲密度 */
+.bond-line {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+.bond-ico {
+  width: 40rpx;
+  height: 40rpx;
+  flex-shrink: 0;
+}
+.bond-k {
+  font-size: var(--font-sm);
+  color: var(--color-text-2);
+  flex-shrink: 0;
+}
+.bond-track {
+  flex: 1;
+  min-width: 0;
+  background: var(--color-bg-deep);
+}
+.bond-v {
+  font-size: var(--font-sm);
+  font-weight: 700;
+  color: var(--color-blush-ink);
+  flex-shrink: 0;
+}
+.room-event {
+  margin-top: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--color-text-2);
+}
+
+/* 明信片：分享给朋友 */
+.card-share {
+  margin-top: var(--space-2);
 }

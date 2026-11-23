@@ -8,19 +8,8 @@ const nav = require('../../utils/navigate')
 const pageLoad = require('../../utils/page-load')
 const { roomOccupancy } = require('../../utils/room-mates')
 
-/** 图鉴收集进度：遇见过白名单里的几个猫品种 */
-function collectionOf(cards) {
-  const met = {}
-  ;(cards || []).forEach((c) => {
-    const b = c && String(c.breed || '').trim()
-    if (b && CAT_BREEDS.indexOf(b) >= 0) met[b] = true
-  })
-  const have = Object.keys(met).length
-  const total = CAT_BREEDS.length
-  // 每个品种一个收集格：遇见过的亮名字，没遇见的放剪影
-  const breeds = CAT_BREEDS.map((name) => ({ name, met: !!met[name] }))
-  return { have, total, percent: Math.round((have / total) * 100), breeds }
-}
+/** 熟面孔：按「每一只猫」统计，品种只是普通标签 */
+const { encounterSummary, encounterCountOf, knownDaysOf, territoryOf, lastSeenOf } = require('../../utils/encounters')
 
 /** 邮戳上的两行字：上「年份」，下「月.日」；没有拍摄时间就用 dateLabel */
 function stampOf(c) {
@@ -42,7 +31,7 @@ Page({
     filters: [],
     cards: [],
     hasCats: false,
-    collection: collectionOf([]),
+    faces: encounterSummary([]),
     featuredId: '',
     featured: null,
     emptyTip: '暂无猫猫记录，去遇见一只吧',
@@ -111,11 +100,14 @@ Page({
       breedUnknown: isPlaceholderBreed(merged.breed),
       _hasMedia: hasFile,
       needMedia: !hasFile,
-      breedPending: c.breedReviewStatus === 'pending' || !!c.pendingBreed,
-      pendingBreed: c.pendingBreed || '',
+      breedPending: false,
+      pendingBreed: '',
       inRoom,
       isRoomMain: false,
-      roomBadge: inRoom ? '在小屋' : ''
+      roomBadge: inRoom ? '在小屋' : '',
+      encounterCount: encounterCountOf(c),
+      knownDays: knownDaysOf(c),
+      territory: territoryOf(c)
     }
   },
 
@@ -200,17 +192,18 @@ Page({
       ...this._albumSelection(breedFilter),
       filters: [{ breed: '全部', count: cards.length }, ...breeds],
       hasCats: cards.length > 0,
-      collection: collectionOf(cards),
+      faces: encounterSummary(cards),
       ready: true
     })
   },
 
   _albumSelection(breedFilter) {
     const allCards = this._allCards || []
+    // 熟面孔优先：最近又见到的排前面
     const cards = (breedFilter
       ? allCards.filter((card) => (card.breed || '待识别') === breedFilter)
       : allCards
-    ).map((card) => this.mapCard(card))
+    ).slice().sort((a, b) => lastSeenOf(b) - lastSeenOf(a)).map((card) => this.mapCard(card))
     return { breedFilter, cards, ...this.pickFeatured(cards, this.data.featuredId) }
   },
 
@@ -234,17 +227,13 @@ Page({
     const featured = this.data.featured
     if (!featured || !featured._id) return
     if (String(featured._id).indexOf('debug_') === 0) {
-      wx.showToast({ title: '调试猫不能放生', icon: 'none' })
-      return
-    }
-    if (featured.breedPending) {
-      wx.showToast({ title: '审核中不能放生', icon: 'none' })
+      wx.showToast({ title: '调试猫不能送去流浪', icon: 'none' })
       return
     }
     wx.showModal({
       title: copy.tips.releaseConfirmTitle,
       content: copy.tips.releaseConfirmBody,
-      confirmText: '放生',
+      confirmText: '送去流浪',
       confirmColor: '#c45a38',
       success: async (res) => {
         if (!res.confirm) return
@@ -257,7 +246,7 @@ Page({
           this.load()
         } catch (err) {
           wx.hideLoading()
-          wx.showToast({ title: (err && err.message) || '放生失败', icon: 'none' })
+          wx.showToast({ title: (err && err.message) || '没送成，请重试', icon: 'none' })
         }
       }
     })
@@ -321,10 +310,6 @@ Page({
   onEditBreed() {
     const featured = this.data.featured
     if (!featured) return
-    if (featured.breedPending) {
-      wx.showToast({ title: '审核中，暂时不能换品种', icon: 'none' })
-      return
-    }
     this.setTabBarHidden(true)
     this.setData({ showBreedPicker: true })
   },
@@ -340,10 +325,6 @@ Page({
     this.setTabBarHidden(false)
     this.setData({ showBreedPicker: false })
     if (!breed || !featured || !featured._id) return
-    if (featured.breedPending) {
-      wx.showToast({ title: '审核中，暂时不能换品种', icon: 'none' })
-      return
-    }
 
     if (String(featured._id).indexOf('debug_') === 0) {
       const mapped = this.mapCard({ ...featured, breed, confidence: 100 })
@@ -355,13 +336,7 @@ Page({
 
     try {
       const res = await api.requestBreedChange(featured._id, breed)
-      const raw = res.card || {
-        ...featured,
-        pendingBreed: breed,
-        breedReviewStatus: 'pending'
-      }
-      if (!raw.breedReviewStatus) raw.breedReviewStatus = 'pending'
-      if (!raw.pendingBreed) raw.pendingBreed = breed
+      const raw = res.card || { ...featured, breed, confidence: 100 }
       const mapped = this.mapCard(raw)
       const cards = (this.data.cards || []).map((c) => (c._id === mapped._id ? mapped : c))
       this.setData({
@@ -370,7 +345,7 @@ Page({
         cards
       })
       this.load()
-      wx.showToast({ title: (res && res.toast) || '已提交审核', icon: 'none' })
+      wx.showToast({ title: (res && res.toast) || '品种已更新', icon: 'none' })
     } catch (err) {
       wx.showToast({ title: (err && err.message) || '提交失败', icon: 'none' })
     }

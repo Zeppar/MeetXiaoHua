@@ -957,7 +957,7 @@ Page({
 
   _bubbleFromCard(card) {
     if (!card) return null
-    const pending = card.breedReviewStatus === 'pending' || !!card.pendingBreed
+    const pending = false // 品种不再审核
     const conf = Number(card.confidence) || 0
     const geo = card.geo || {}
     const geoLabel =
@@ -1160,6 +1160,30 @@ Page({
 
   onGoShoot() {
     nav.navigateTo(this, '/pages/camera/camera')
+  },
+
+  /** 保存时没记地点的猫：单独一组列出来，可以查看或用当前位置补上 */
+  onShowUnlocated() {
+    if (this.__mxhUnloaded) return
+    const located = new Set((this._geoCards || []).map((card) => card._id))
+    const items = (this._footprintCards || [])
+      .filter((card) => card && card._id && !located.has(card._id))
+      .sort((a, b) => (b.shotAt || 0) - (a.shotAt || 0))
+      .map((card) => this._bubbleFromCard(card))
+      .filter(Boolean)
+    if (!items.length) return
+    this.setData({
+      bubble: null,
+      bubbleGroup: null,
+      detailCard: null,
+      clusterSheet: {
+        allFootprints: true,
+        unlocated: true,
+        title: `未标注地点 · ${items.length} 只`,
+        subtitle: '保存时没有记下地点。点一只查看，或者用你现在的位置补上（会模糊到街区）',
+        items
+      }
+    })
   },
 
   /** 图鉴有猫但足迹不全时：再补一轮坐标 */

@@ -15,6 +15,7 @@ const {
 } = require('../utils/breed-review')
 const { formatDistanceLabel, randomDistanceKm, pickBehavior, DURATIONS, randBetween, HOUR_MS } = require('../constants/outing')
 const { normalizePhotoIdentity, appendIdentity } = require('../utils/photo-identity')
+const { ENCOUNTER_INTIMACY, encounterCountOf } = require('../utils/encounters')
 const STORE_KEY = 'mxh_local_db_v1'
 
 /** 内存缓存：同一会话避免每次进页都同步读整库 */
@@ -117,7 +118,7 @@ function buildInteractLine(pet, fed, adopted) {
   const bits = []
   if (pet) bits.push(outingEngine.COPY.reportPet)
   if (fed) bits.push(outingEngine.COPY.reportFed)
-  if (adopted) bits.push('被收留进了新家。')
+  if (adopted) bits.push('它的卡片被人收下了。')
   return bits.join('')
 }
 
@@ -528,7 +529,7 @@ function enrichReleasedStatus(db, item) {
     return {
       ...item,
       status: 'adopted',
-      statusLabel: '已被收养',
+      statusLabel: '卡片已被收下',
       statusTone: 'adopted'
     }
   }
@@ -647,7 +648,7 @@ function maybeSpawnMockVisitor(db, openid, now) {
         ? '它在门口停了一会儿，好像认出了这里。'
         : released.name
           ? `流浪的「${released.name}」来串门了。`
-          : '一只被放生的小猫路过你家，停了下来。'
+          : '一张流浪的猫卡路过你家，停了下来。'
     released.visitCount = (released.visitCount || 0) + 1
     released.lastVisitAt = now
     released.status = 'visiting'
@@ -685,12 +686,9 @@ async function releaseCard(cardId, cloudRelease, cloudRoom) {
   if (!cloudRelease) {
     if (!card) throw new Error('找不到这只猫')
     if (outingEngine.isAway(user.outing) && user.outing.cardId === cardId) {
-      const err = new Error('这只猫还在外面，回来后才能放生')
+      const err = new Error('这只猫还在外面，回来后才能送去流浪')
       err.code = 'CAT_AWAY'
       throw err
-    }
-    if (card.breedReviewStatus === 'pending' || card.pendingBreed) {
-      throw new Error('审核中不能放生')
     }
   }
 
@@ -768,11 +766,11 @@ async function adoptVisitor({ visitId, geo, placeText } = {}) {
   ensureUser(db, openid)
   const visit = db.visits.find((v) => v._id === visitId && v.hostOpenId === openid)
   if (!visit || visit.status !== 'active' || Date.now() >= visit.leaveAt) throw new Error('小猫已经走了')
-  if (!visit.fromReleased || !visit.releasedId) throw new Error('这只不是放生猫')
+  if (!visit.fromReleased || !visit.releasedId) throw new Error('这只不是流浪的卡片')
 
   const released = (db.released || []).find((r) => r._id === visit.releasedId)
-  if (!released) throw new Error('找不到放生记录')
-  if (released.status === 'adopted') throw new Error('它已经被收养了')
+  if (!released) throw new Error('找不到这张流浪卡片')
+  if (released.status === 'adopted') throw new Error('它的卡片已经被别人收下了')
 
   const nextGeo =
     geo &&
@@ -782,11 +780,6 @@ async function adoptVisitor({ visitId, geo, placeText } = {}) {
     Number.isFinite(geo.lng)
       ? { lat: geo.lat, lng: geo.lng }
       : null
-  if (!nextGeo) {
-    const err = new Error('需要位置信息才能收养')
-    err.code = 'GEO_REQUIRED'
-    throw err
-  }
 
   const card = {
     _id: uid('card'),
@@ -799,7 +792,7 @@ async function adoptVisitor({ visitId, geo, placeText } = {}) {
     name: clampText(released.name || '', 12),
     confidence: 100,
     shotAt: Date.now(),
-    note: '从门口收养的流浪猫',
+    note: '在门口收下的流浪卡片',
     placeText: clampText(placeText || '我家门口', 30),
     geo: nextGeo,
     mattingFailed: !released.cutoutPath && !released.cutoutFileId,
@@ -827,7 +820,7 @@ async function adoptVisitor({ visitId, geo, placeText } = {}) {
   save(db)
   return {
     card,
-    toast: '你收养了它，它有新家了',
+    toast: '你收下了它的卡片',
     released
   }
 }
@@ -1436,19 +1429,11 @@ async function createCard(payload) {
   const recognizedBreed = normalizeRecognizedBreed(
     payload.recognizedBreed !== undefined ? payload.recognizedBreed : payload.breed
   )
-  let breed = clampText(payload.breed || '', 20) || UNKNOWN_LABEL
-  let pendingBreed = ''
-  let breedReviewStatus = ''
-  // 保存时手动改品种（与识别结果不同，或识别失败后自选）→ 挂审核
-  if (
-    payload.breedManual &&
-    breed &&
-    (!recognizedBreed || breed !== recognizedBreed)
-  ) {
-    pendingBreed = breed
-    breedReviewStatus = 'pending'
-    breed = recognizedBreed || '待识别'
-  }
+  // 品种不再审核：手动选的品种直接生效
+  const breed = clampText(payload.breed || '', 20) || UNKNOWN_LABEL
+  const pendingBreed = ''
+  const breedReviewStatus = ''
+  // 定位可选：没有坐标也能保存，之后在足迹页「未标注地点」里补
   const geo =
     payload.geo &&
     typeof payload.geo.lat === 'number' &&
@@ -1457,11 +1442,6 @@ async function createCard(payload) {
     Number.isFinite(payload.geo.lng)
       ? { lat: payload.geo.lat, lng: payload.geo.lng }
       : null
-  if (!geo) {
-    const err = new Error('需要位置信息才能记录相遇')
-    err.code = 'GEO_REQUIRED'
-    throw err
-  }
   const card = {
     _id: uid('card'),
     _openid: openid,
@@ -1643,35 +1623,25 @@ async function requestBreedChange(cardId, breed) {
   Object.assign(card, ensureRecognizedBreedField(card))
   if (card.recognizedBreed === undefined) card.recognizedBreed = ''
 
-  if (card.breedReviewStatus === 'pending') {
-    throw new Error('审核中，暂时不能换品种')
-  }
-  if (card.breed === target) {
+  const hadPending = card.breedReviewStatus === 'pending' || !!card.pendingBreed
+  if (card.breed === target && !hadPending) {
     return { card, mode: 'noop', toast: '已经是这个品种了' }
   }
 
-  if (!Array.isArray(db.breedReviews)) db.breedReviews = []
-  const review = {
-    _id: uid('brev'),
-    _openid: openid,
-    cardId,
-    fromBreed: card.breed || '',
-    toBreed: target,
-    recognizedBreed: card.recognizedBreed || '',
-    status: 'pending',
-    createdAt: Date.now()
+  // 不再审核：用户选的品种直接生效，识别结果留在 recognizedBreed 备查
+  if (hadPending && Array.isArray(db.breedReviews)) {
+    db.breedReviews.forEach((r) => {
+      if (r.cardId === cardId && r.status === 'pending') r.status = 'superseded'
+    })
   }
-  db.breedReviews.unshift(review)
-  card.pendingBreed = target
-  card.breedReviewStatus = 'pending'
-  card.breedReviewId = review._id
+  card.breed = target
+  card.confidence = 100
+  card.pendingBreed = ''
+  card.breedReviewStatus = ''
+  card.breedReviewId = ''
+  recomputeStats(db, openid)
   save(db)
-  return {
-    card,
-    mode: 'pending',
-    review,
-    toast: '已提交审核，通过后才会更换品种'
-  }
+  return { card, mode: 'applied', toast: '已换成「' + target + '」' }
 }
 
 async function reviewBreedChange({ reviewId, cardId, approve }) {
@@ -1847,10 +1817,17 @@ async function createMemory(payload) {
     text: clampText(payload.text || '', 200),
     imagePath: payload.imagePath || '',
     imageFileId: payload.imageFileId || '',
+    encounter: !!payload.encounter,
     createdAt: Date.now()
   }
   db.memories.push(memory)
   if (identity) card.photoIdentities = appendIdentity(card.photoIdentities, identity)
+  // 真实再遇见：遇见次数 +1，小屋亲密度大涨
+  if (memory.encounter) {
+    card.encounterCount = encounterCountOf(card) + 1
+    card.lastSeenAt = memory.createdAt
+    card.intimacy = Math.min(100, (Number(card.intimacy) || 0) + ENCOUNTER_INTIMACY)
+  }
   recomputeStats(db, openid)
   save(db)
   return { memory }

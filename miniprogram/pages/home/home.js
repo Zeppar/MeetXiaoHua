@@ -1,9 +1,9 @@
 const api = require('../../services/api')
 const cache = require('../../services/storage-cache')
 const copy = require('../../constants/copy')
-const { CAT_BREEDS } = require('../../constants/breeds')
 const { formatDateShort, cardDisplayName } = require('../../utils/format')
 const { pickCardImage } = require('../../utils/card-media')
+const { encounterSummary } = require('../../utils/encounters')
 const { resolveHomeCards } = require('../../utils/room-mates')
 const nav = require('../../utils/navigate')
 
@@ -67,8 +67,7 @@ Page({
     privacyBody: copy.modals.privacyBody,
     recent: [],
     recentCount: 0,
-    breedCount: 0,
-    breedTotal: CAT_BREEDS.length,
+    encounterTotal: 0,
     myCat: { status: 'loading' },
     hasReport: false,
     visitor: null,
@@ -112,14 +111,10 @@ Page({
   },
 
   applyCards(all) {
-    const breeds = {}
-    all.forEach((c) => {
-      if (c && CAT_BREEDS.indexOf(c.breed) >= 0) breeds[c.breed] = true
-    })
     this.setData({
       recent: all.slice(0, 8).map(toRecent),
       recentCount: all.length,
-      breedCount: Object.keys(breeds).length
+      encounterTotal: encounterSummary(all).encounterTotal
     })
   },
 

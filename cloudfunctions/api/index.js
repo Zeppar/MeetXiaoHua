@@ -70,6 +70,8 @@ const BEHAVIORS = [
 ]
 
 const HOUR_MS = 60 * 60 * 1000
+/** 真实再遇见一次，亲密度涨这么多 */
+const ENCOUNTER_INTIMACY = 15
 
 function randBetweenHours(minH, maxH) {
   const min = minH * HOUR_MS
@@ -432,10 +434,8 @@ function normalizeRecognizedBreedCloud(breed) {
 
 async function createCard(openid, payload = {}) {
   await ensureUser(openid)
+  // 定位可选：没有坐标也能保存，之后再补
   const geo = normalizeGeo(payload.geo)
-  if (!geo) {
-    return { error: '需要位置信息才能记录相遇', code: 'GEO_REQUIRED' }
-  }
   const doc = buildCard(openid, payload, geo)
   if (doc.clientId) {
     try {
@@ -469,14 +469,10 @@ function buildCard(openid, payload, geo) {
   const recognizedBreed = normalizeRecognizedBreedCloud(
     payload.recognizedBreed !== undefined ? payload.recognizedBreed : payload.breed
   )
-  let breed = clampText(payload.breed || '', 20) || UNKNOWN_LABEL
-  let pendingBreed = ''
-  let breedReviewStatus = ''
-  if (payload.breedManual && breed && (!recognizedBreed || breed !== recognizedBreed)) {
-    pendingBreed = breed
-    breedReviewStatus = 'pending'
-    breed = recognizedBreed || '待识别'
-  }
+  // 品种不再审核：手动选的品种直接生效，识别结果保留在 recognizedBreed
+  const breed = clampText(payload.breed || '', 20) || UNKNOWN_LABEL
+  const pendingBreed = ''
+  const breedReviewStatus = ''
   return {
     _openid: openid,
     ownerOpenId: openid,
@@ -565,37 +561,29 @@ async function requestBreedChange(openid, { cardId, breed }) {
     recognizedBreed = normalizeRecognizedBreedCloud(card.breed)
     await db.collection('cards').doc(cardId).update({ data: { recognizedBreed } })
   }
-  if (card.breedReviewStatus === 'pending') {
-    return { error: '审核中，暂时不能换品种', code: 'PENDING' }
-  }
-  if (card.breed === target) {
+  const hadPending = card.breedReviewStatus === 'pending' || !!card.pendingBreed
+  if (card.breed === target && !hadPending) {
     return { card, mode: 'noop', toast: '已经是这个品种了' }
   }
-  const rev = await db.collection('breed_reviews').add({
-    data: {
-      _openid: openid,
-      cardId,
-      fromBreed: card.breed || '',
-      toBreed: target,
-      recognizedBreed,
-      status: 'pending',
-      createdAt: Date.now()
-    }
-  })
+  // 不再审核：用户选的品种直接生效，识别结果留在 recognizedBreed 备查
+  if (card.breedReviewId) {
+    await db.collection('breed_reviews').doc(card.breedReviewId)
+      .update({ data: { status: 'superseded', reviewedAt: Date.now() } })
+      .catch(() => {})
+  }
   await db.collection('cards').doc(cardId).update({
     data: {
-      pendingBreed: target,
-      breedReviewStatus: 'pending',
-      breedReviewId: rev._id,
+      breed: target,
+      confidence: 100,
+      pendingBreed: '',
+      breedReviewStatus: '',
+      breedReviewId: '',
       recognizedBreed
     }
   })
+  await recomputeStats(openid).catch((e) => console.warn('breed change stats fail', e))
   const again = await getCard(openid, cardId)
-  return {
-    card: again.card,
-    mode: 'pending',
-    toast: '已提交审核，通过后才会更换品种'
-  }
+  return { card: again.card, mode: 'applied', toast: '已换成「' + target + '」' }
 }
 
 /**
@@ -800,6 +788,7 @@ async function createMemory(openid, payload = {}) {
     text: clampText(payload.text, 200),
     imageFileId: payload.imageFileId || '',
     imagePath: payload.imagePath || '',
+    encounter: !!payload.encounter,
     createdAt: Date.now()
   }
   const memory = await db.runTransaction(async (tx) => {
@@ -809,6 +798,13 @@ async function createMemory(openid, payload = {}) {
     const result = await tx.collection('memories').add({ data: doc })
     const data = { memoryCount: _.inc(1) }
     if (identity) data.photoIdentities = appendIdentity(current.photoIdentities, identity)
+    // 真实再遇见：遇见次数 +1，小屋亲密度大涨（与 miniprogram/utils/encounters.js 一致）
+    if (doc.encounter) {
+      const count = Number(current.encounterCount)
+      data.encounterCount = (Number.isFinite(count) && count >= 1 ? Math.floor(count) : 1) + 1
+      data.lastSeenAt = doc.createdAt
+      data.intimacy = Math.min(100, (Number(current.intimacy) || 0) + ENCOUNTER_INTIMACY)
+    }
     await ref.update({ data })
     return { _id: result._id, ...doc }
   })
@@ -886,6 +882,8 @@ function buildReport(outing, card, showDistance, log) {
     distanceLine: `${card.name || '你的' + ((['待识别', '识别中…', '未知小动物'].indexOf(breed) >= 0 ? '' : breed) || '小猫')}去了一趟「${distLabel}」`,
     behaviorLine: outing.behaviorText || '',
     interactLine,
+    // 它的地盘：相遇地点文字（已模糊），明信片上提示用户出门找它
+    territory: String(card.placeText || '').trim() === '已记录当前位置' ? '' : clampText(card.placeText || '', 30),
     catImage: log.catImage,
     behaviorIndex: log.behaviorIndex,
     friend: log.friend,
@@ -901,7 +899,7 @@ async function releaseCard(openid, cardId) {
   if (!card) {
     const { data } = await db.collection('released_cats').where({ releasedBy: openid, cardId }).limit(1).get()
     return data && data[0]
-      ? { ok: true, released: data[0], toast: '它自由了。以后也许会去别人家串门。' }
+      ? { ok: true, released: data[0], toast: '它的卡片去流浪了，也许会去别人家串门。' }
       : { error: 'card not found', code: 'NOT_FOUND' }
   }
 
@@ -913,7 +911,7 @@ async function releaseCard(openid, cardId) {
     ownerOpenId: openid, guestCardId: cardId, status: 'active', leaveAt: _.gt(now)
   }).limit(100).get()
   if (active.data.some((v) => !v.fromReleased)) {
-    return { error: '这只猫还在外面，回来后才能放生', code: 'CAT_AWAY' }
+    return { error: '这只猫还在外面，回来后才能送去流浪', code: 'CAT_AWAY' }
   }
 
   const result = await db.runTransaction(async (tx) => {
@@ -923,10 +921,7 @@ async function releaseCard(openid, cardId) {
     const cat = await readDocument(cardRef)
     if (!cardBelongsTo(cat, openid)) return { error: 'card not found', code: 'NOT_FOUND' }
     if (isAway(current.outing) && current.outing.cardId === cardId) {
-      return { error: '这只猫还在外面，回来后才能放生', code: 'CAT_AWAY' }
-    }
-    if (cat.breedReviewStatus === 'pending' || cat.pendingBreed) {
-      return { error: '审核中不能放生', code: 'PENDING' }
+      return { error: '这只猫还在外面，回来后才能送去流浪', code: 'CAT_AWAY' }
     }
 
     const roomMateIds = Array.isArray(current.roomMateIds)
@@ -969,7 +964,7 @@ async function releaseCard(openid, cardId) {
     const added = await tx.collection('released_cats').add({ data: released })
     await cardRef.remove()
     await userRef.update({ data: room })
-    return { ok: true, room, released: { _id: added._id, ...released }, toast: '它自由了。以后也许会去别人家串门。' }
+    return { ok: true, room, released: { _id: added._id, ...released }, toast: '它的卡片去流浪了，也许会去别人家串门。' }
   })
   if (result.ok) await recomputeStats(openid).catch((e) => console.warn('release stats fail', e))
   return result
@@ -1014,7 +1009,7 @@ async function maybeSpawnReleasedVisitor(openid, now) {
       ? '它在门口停了一会儿，好像认出了这里。'
       : pick.name
         ? `流浪的「${pick.name}」来串门了。`
-        : '一只被放生的小猫路过你家，停了下来。'
+        : '一张流浪的猫卡路过你家，停了下来。'
 
   return db.runTransaction(async (tx) => {
     const userRef = tx.collection('users').doc(user._id)
@@ -1134,7 +1129,7 @@ async function backfillInboundVisitLogs(openid) {
 function releasedStatusView(item, visitingMap) {
   if (!item) return item
   if (item.status === 'adopted') {
-    return { ...item, status: 'adopted', statusLabel: '已被收养', statusTone: 'adopted' }
+    return { ...item, status: 'adopted', statusLabel: '卡片已被收下', statusTone: 'adopted' }
   }
   if (item.status === 'visiting' || (visitingMap && visitingMap[item._id])) {
     return { ...item, status: 'visiting', statusLabel: '正在别人家串门', statusTone: 'visiting' }
@@ -1172,10 +1167,8 @@ async function listMyReleased(openid) {
 
 async function adoptVisitor(openid, { visitId, geo, placeText } = {}) {
   if (!visitId) return { error: 'bad visit', code: 'BAD_REQUEST' }
+  // 定位可选：没有坐标也能收下，之后在足迹页补
   const nextGeo = normalizeGeo(geo)
-  if (!nextGeo) {
-    return { error: '需要位置信息才能收养', code: 'GEO_REQUIRED' }
-  }
   await ensureUser(openid)
   const result = await db.runTransaction(async (tx) => {
     const now = Date.now()
@@ -1184,19 +1177,19 @@ async function adoptVisitor(openid, { visitId, geo, placeText } = {}) {
       return { error: '小猫已经走了', code: 'GONE' }
     }
     if (!visit.fromReleased || !visit.releasedId) {
-      return { error: '这只不是放生猫', code: 'BAD_REQUEST' }
+      return { error: '这只不是流浪的卡片', code: 'BAD_REQUEST' }
     }
     const releasedRef = tx.collection('released_cats').doc(visit.releasedId)
     const released = await readDocument(releasedRef)
     if (visit.adoptedByHost && released && released.adoptedBy === openid && released.adoptedCardId) {
       const card = await readDocument(tx.collection('cards').doc(released.adoptedCardId))
-      if (cardBelongsTo(card, openid)) return { card, toast: '你收养了它，它有新家了' }
+      if (cardBelongsTo(card, openid)) return { card, toast: '你收下了它的卡片' }
     }
     if (visit.status !== 'active' || now >= visit.leaveAt) {
       return { error: '小猫已经走了', code: 'GONE' }
     }
     if (!released || released.status === 'adopted') {
-      return { error: '它已经被收养了', code: 'GONE' }
+      return { error: '它的卡片已经被别人收下了', code: 'GONE' }
     }
 
     const doc = buildCard(openid, {
@@ -1207,7 +1200,7 @@ async function adoptVisitor(openid, { visitId, geo, placeText } = {}) {
       breed: released.breed || visit.breed || '待识别',
       name: released.name || '',
       confidence: 100,
-      note: '从门口收养的流浪猫',
+      note: '在门口收下的流浪卡片',
       placeText: placeText || '我家门口',
       intimacy: 18,
       mattingFailed: !(released.cutoutFileId || released.cutoutPath)
@@ -1218,10 +1211,105 @@ async function adoptVisitor(openid, { visitId, geo, placeText } = {}) {
       data: { status: 'adopted', adoptedBy: openid, adoptedAt: now, adoptedCardId: added._id }
     })
     await finishVisit(tx, visit, now, { adopted: true, released })
-    return { card: { _id: added._id, ...doc }, toast: '你收养了它，它有新家了' }
+    return { card: { _id: added._id, ...doc }, toast: '你收下了它的卡片' }
   })
   if (result.card) await recomputeStats(openid).catch((e) => console.warn('adoption stats fail', e))
   return result
+}
+
+/** 集合不存在时自动建（visit_invites 是新加的集合） */
+async function addWithCollection(name, data) {
+  try {
+    return await db.collection(name).add({ data })
+  } catch (e) {
+    try {
+      await db.createCollection(name)
+    } catch (err) {
+      /* 已存在或无权限：交给下面重试报错 */
+    }
+    return db.collection(name).add({ data })
+  }
+}
+
+const INVITE_TTL_MS = 3 * 24 * HOUR_MS
+const INVITE_MAX_GUESTS = 20
+
+/** 邀请好友接待我的猫：只生成一个邀请 id，分享链接里不带 openid */
+async function createVisitInvite(openid, { cardId } = {}) {
+  const { card } = await getCard(openid, cardId)
+  if (!card) return { error: '找不到这只猫', code: 'NOT_FOUND' }
+  const now = Date.now()
+  const added = await addWithCollection('visit_invites', {
+    _openid: openid,
+    cardId: card._id,
+    createdAt: now,
+    expiresAt: now + INVITE_TTL_MS,
+    acceptedBy: []
+  })
+  return { inviteId: added._id, expiresAt: now + INVITE_TTL_MS }
+}
+
+/** 好友打开邀请：邀请人的猫来好友小屋串门 1~4 小时 */
+async function acceptVisitInvite(openid, { inviteId } = {}) {
+  if (!inviteId) return { error: '邀请无效', code: 'BAD_REQUEST' }
+  const host = await ensureUser(openid)
+  if (!host.settings.allowVisitors) {
+    return { error: '你关掉了来访，先在设置里打开「允许来访」', code: 'VISITORS_OFF' }
+  }
+  const now = Date.now()
+  return db.runTransaction(async (tx) => {
+    const ref = tx.collection('visit_invites').doc(inviteId)
+    const invite = await readDocument(ref)
+    if (!invite) return { error: '邀请已失效', code: 'GONE' }
+    if (invite._openid === openid) return { error: '这是你自己的猫，发给好友试试', code: 'SELF' }
+    if (now > invite.expiresAt) return { error: '邀请过期了', code: 'GONE' }
+    const accepted = Array.isArray(invite.acceptedBy) ? invite.acceptedBy : []
+    if (accepted.indexOf(openid) >= 0) return { ok: true, already: true, toast: '它已经来过你家啦' }
+    if (accepted.length >= INVITE_MAX_GUESTS) return { error: '这只猫今天串门太多次了', code: 'GONE' }
+    const card = await readDocument(tx.collection('cards').doc(invite.cardId))
+    if (!cardBelongsTo(card, invite._openid)) return { error: '这只猫已经不在了', code: 'GONE' }
+
+    const picked = pickBehavior(-1)
+    const leaveAt = now + randBetweenHours(1, 4)
+    const visit = {
+      hostOpenId: openid,
+      ownerOpenId: invite._openid,
+      guestCardId: card._id,
+      breed: card.breed || '小猫',
+      name: card.name || '',
+      cutoutPath: card.cutoutFileId || card.cutoutPath || card.originalFileId || card.originalPath || '',
+      behaviorText: picked.text,
+      behaviorIndex: picked.index,
+      friend: null,
+      distanceKm: Math.round((0.5 + Math.random() * 7.5) * 10) / 10,
+      arriveAt: now,
+      leaveAt,
+      status: 'active',
+      petByHost: false,
+      fedByHost: false,
+      seenLeft: false,
+      fromInvite: true
+    }
+    const added = await tx.collection('visits').add({ data: visit })
+    await ref.update({ data: { acceptedBy: accepted.concat(openid) } })
+    // 邀请人那边记一笔：我的猫去好友家串门了
+    await writeVisitLog(tx, invite._openid, {
+      direction: 'outbound',
+      fromInvite: true,
+      visitId: added._id,
+      cardId: card._id,
+      breed: visit.breed,
+      name: visit.name,
+      cutoutPath: visit.cutoutPath,
+      behaviorText: visit.behaviorText,
+      behaviorIndex: visit.behaviorIndex,
+      distanceKm: visit.distanceKm,
+      leftAt: now,
+      leaveAt,
+      at: now
+    })
+    return { ok: true, visitId: added._id, toast: '好友的猫来串门了' }
+  })
 }
 
 async function pickVisitHost(excludeOpenId) {
@@ -1534,7 +1622,7 @@ async function listVisitLogs(openid, { direction } = {}) {
     let interactLine = ''
     if (l.pet) interactLine += '有人摸了摸它。'
     if (l.fed) interactLine += '有人给了它一颗猫粮。'
-    if (l.adopted) interactLine += '被收留进了新家。'
+    if (l.adopted) interactLine += '它的卡片被人收下了。'
     const title =
       l.direction === 'outbound'
         ? `你的${l.name || (['待识别', '识别中…', '未知小动物'].indexOf(l.breed) >= 0 ? '' : l.breed) || '小猫'}去串门了`
@@ -1569,6 +1657,10 @@ exports.main = async (event) => {
         return await recognize(event)
       case 'matting':
         return await runMatting(event, openid)
+      case 'createVisitInvite':
+        return await createVisitInvite(openid, event)
+      case 'acceptVisitInvite':
+        return await acceptVisitInvite(openid, event)
       case 'embedCatPhoto':
         return await embedCatPhoto(openid, event.imageBase64)
       case 'listCards':

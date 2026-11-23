@@ -5,6 +5,7 @@
 const local = require('./local-store')
 const cache = require('./storage-cache')
 const { appendIdentity } = require('../utils/photo-identity')
+const { mergeEncounterFields } = require('../utils/encounters')
 const { isEphemeralPath, persistLocalImage, sanitizeCardMedia } = require('../utils/card-media')
 const {
   blurCoordinate,
@@ -344,6 +345,8 @@ function mergeCardLists(cloudCards, localCards) {
         (refs, identity) => appendIdentity(refs, identity),
         c.photoIdentities || []
       ),
+      ...mergeEncounterFields(c, localCard),
+      intimacy: Math.max(Number(c.intimacy) || 0, Number(localCard.intimacy) || 0),
       geo: pickGeo(c.geo, localCard.geo)
     }
   })
@@ -405,7 +408,7 @@ async function listCards(payload = {}) {
         : mergeCardLists(cloudCards, localRes.cards || [])
     const filtered = (
       filterByBreed ? cards.filter((c) => c.breed === breed) : cards
-    ).map(sanitizeCardMedia)
+    ).map((c) => sanitizeCardMedia(applyLegacyPendingBreed(c)))
     if (!filterByBreed) cache.cacheCards(filtered)
     return { cards: filtered, fromCache: false }
   } catch (e) {
@@ -426,17 +429,27 @@ async function repairOrphanCards() {
   return res
 }
 
+/**
+ * 品种不再审核：旧卡上还挂着的「申请换成 X」直接当作生效品种展示。
+ * 只改读出来的样子；用户下次换品种时 requestBreedChange 会把两边数据一起改正。
+ */
+function applyLegacyPendingBreed(card) {
+  if (!card || !card.pendingBreed) return card
+  return { ...card, breed: card.pendingBreed, pendingBreed: '', breedReviewStatus: '' }
+}
+
 async function getCard(cardId) {
   // 云端返回 { card: null } 时不会抛错，必须再读本地，否则「保存成功却提示卡牌不存在」
   if (useCloud) {
     try {
       const res = await callCloud('getCard', { cardId })
-      if (res && res.card) return res
+      if (res && res.card) return { ...res, card: applyLegacyPendingBreed(res.card) }
     } catch (e) {
       console.warn('[api] cloud getCard fail, fallback local', e)
     }
   }
-  return local.getCard(cardId)
+  const localRes = await local.getCard(cardId)
+  return localRes && localRes.card ? { ...localRes, card: applyLegacyPendingBreed(localRes.card) } : localRes
 }
 
 async function uploadLocalImageToCloud(filePath, folder) {
@@ -478,15 +491,11 @@ async function uploadLocalImageToCloud(filePath, folder) {
 }
 
 async function createCard(payload) {
+  // 定位可选：没有坐标也能保存，足迹页「未标注地点」里可以之后补
   let nextGeo = normalizeGeo(payload && payload.geo)
-  if (!nextGeo) {
-    const err = new Error('需要位置信息才能记录相遇')
-    err.code = 'GEO_REQUIRED'
-    throw err
-  }
   // 模糊到街区后，按同街区已有猫散开，避免地图永远叠成 1 个点
-  nextGeo = blurCoordinate(nextGeo.lat, nextGeo.lng)
-  try {
+  if (nextGeo) nextGeo = blurCoordinate(nextGeo.lat, nextGeo.lng)
+  if (nextGeo) try {
     const listed = await listCards({})
     const cell = geoCellKey(nextGeo.lat, nextGeo.lng)
     const siblings = (listed.cards || []).filter((c) => {
@@ -1187,7 +1196,7 @@ async function releaseCard(cardId) {
   let res
   if (useCloud && !String(cardId).startsWith('card_')) {
     res = await callCloud('releaseCard', { cardId })
-    if (!res.released) throw new Error('放生失败，请确认云函数已更新')
+    if (!res.released) throw new Error('没送成，请确认云函数已更新')
     try {
       lastCloudRoom = null
       const localRes = await local.releaseCard(cardId, res.released, res.room)
@@ -1235,6 +1244,23 @@ async function listMyReleased() {
     console.warn('[api] listMyReleased cloud fail', e)
     return localRes
   }
+}
+
+/**
+ * 邀请好友接待我的猫（只走云端）：串门记录本来就只在云端，没有本地副本可写；
+ * 没开云开发时直接提示，不假装成功。
+ */
+async function createVisitInvite(cardId) {
+  if (!useCloud) throw new Error('需要云开发才能邀请好友')
+  if (!cardId || String(cardId).startsWith('card_')) throw new Error('这只猫还没同步到云端，稍后再试')
+  return callCloud('createVisitInvite', { cardId })
+}
+
+async function acceptVisitInvite(inviteId) {
+  if (!useCloud) throw new Error('需要云开发才能接待好友的猫')
+  const res = await callCloud('acceptVisitInvite', { inviteId })
+  lastCloudRoom = null
+  return res
 }
 
 async function adoptVisitor({ visitId, geo, placeText, source } = {}) {
@@ -1393,6 +1419,8 @@ module.exports = {
   releaseCard,
   listMyReleased,
   adoptVisitor,
+  createVisitInvite,
+  acceptVisitInvite,
   backfillMissingCardGeo,
   listMemories,
   createMemory,

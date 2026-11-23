@@ -27,8 +27,8 @@
       </view>
       <view class="stat">
         <view class="stamp stat-stamp stat-sky tilt-2">
-          <view class="stamp-k">遇见品种</view>
-          <view class="stamp-v num">{{stats.breedCount}}</view>
+          <view class="stamp-k">遇见次数</view>
+          <view class="stamp-v num">{{encounterTotal}}</view>
         </view>
       </view>
       <view class="stat">
@@ -48,11 +48,6 @@
   </view>
 
   <view class="list anim-rise delay-2">
-    <view class="list-row" hover-class="list-row-press" bindtap="onBreedReview">
-      <view class="list-ico ico-blush"><image src="/assets/icons/review.svg" /></view>
-      <view class="list-title">品种审核</view>
-      <view class="list-arrow"></view>
-    </view>
     <view class="list-row" hover-class="list-row-press" bindtap="onVisitLog">
       <view class="list-ico ico-sky"><image src="/assets/icons/outing.svg" /></view>
       <view class="list-title">猫猫出门记录</view>
@@ -60,7 +55,7 @@
     </view>
     <view class="list-row" hover-class="list-row-press" bindtap="onReleased">
       <view class="list-ico ico-blush"><image src="/assets/icons/release.svg" /></view>
-      <view class="list-title">我放生的猫</view>
+      <view class="list-title">流浪的卡片</view>
       <view class="list-arrow"></view>
     </view>
   </view>

@@ -753,7 +753,9 @@ Page({
       await api.createMemory({
         cardId,
         imagePath: r.originalPath || this.data.tempPath,
-        photoIdentity: this._catMatch && this._catMatch.identity
+        photoIdentity: this._catMatch && this._catMatch.identity,
+        // 拍照页确认「是它」= 真实再遇见一次
+        encounter: true
       })
     } catch (err) {
       this._saving = false
@@ -765,7 +767,7 @@ Page({
     this._saving = false
     if (this.__mxhUnloaded) return
     this.setData({ saving: false, catMatches: [] })
-    wx.showToast({ title: '已存入记忆', icon: 'success' })
+    wx.showToast({ title: '又见到它了，亲密度大涨', icon: 'none' })
     nav.redirectTo(this, '/pages/card-detail/card-detail?id=' + encodeURIComponent(cardId))
   },
 
@@ -799,7 +801,7 @@ Page({
     this.setData({ locating: true, locationHint: copy.tips.locating })
     const token = this.recognizeToken
     const loc = await getCurrentPosition()
-    if (token !== this.recognizeToken || !this.data.showPlaceModal) return false
+    if (token !== this.recognizeToken) return false
     if (!loc) {
       this.setData({
         locating: false,
@@ -834,10 +836,7 @@ Page({
     if (!this.data.showPlaceModal || this._saving) return
     const placeText = ((e && e.detail && e.detail.value) || this.data.placeText || '').trim()
     this.setData({ placeText })
-    if (!isValidGeo(this.data.geo)) {
-      const ok = await this.ensureGeo()
-      if (!ok) return
-    }
+    // 定位可选：拿不到也照样保存，之后在足迹页补
     this.persistCard()
   },
 
@@ -873,14 +872,13 @@ Page({
     if (this._saving || this.data.saving || !this.data.result) return
     this._saving = true
     const token = this.recognizeToken
-    if (!isValidGeo(this.data.geo)) {
-      const ok = await this.ensureGeo()
-      if (!ok) {
-        this._saving = false
-        if (token === this.recognizeToken) this.setData({ showPlaceModal: true })
-        return
-      }
+    // 定位可选：试一次，拿不到就不带坐标保存，足迹页「未标注地点」里可以再补
+    if (!isValidGeo(this.data.geo)) await this.ensureGeo()
+    if (token !== this.recognizeToken) {
+      this._saving = false
+      return
     }
+    const savedWithoutGeo = !isValidGeo(this.data.geo)
 
     this.setData({ saving: true, showPlaceModal: false })
     await this.waitRefineIfNeeded()
@@ -907,16 +905,12 @@ Page({
       })
       wx.hideLoading()
       this.setData({ saving: false })
+      if (savedWithoutGeo) wx.showToast({ title: copy.tips.savedWithoutGeo, icon: 'none' })
       nav.redirectTo(this, `/pages/card-detail/card-detail?id=${card._id}`)
     } catch (err) {
       this._saving = false
       wx.hideLoading()
       this.setData({ saving: false })
-      if (err && err.code === 'GEO_REQUIRED') {
-        this.setData({ showPlaceModal: true, showLocationAuth: true })
-        wx.showToast({ title: copy.tips.locationRequired, icon: 'none' })
-        return
-      }
       wx.showToast({ title: (err && err.message) || '保存失败，请重试', icon: 'none' })
     }
   }

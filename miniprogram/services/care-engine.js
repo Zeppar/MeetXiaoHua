@@ -114,13 +114,14 @@ function toBars(care) {
 }
 
 /** 亲密度：挂在每只猫卡上，互动慢慢涨，不随护理衰减 */
+// 小屋里的互动只涨一点；真实再遇见同一只猫涨得多（utils/encounters.js 的 ENCOUNTER_INTIMACY）
 const INTIMACY_GAIN = {
-  pet: 3,
-  feed: 4,
-  play: 5,
-  sleep: 2
+  pet: 1,
+  feed: 2,
+  play: 2,
+  sleep: 1
 }
-const DAILY_INTIMACY_CAP = 28
+const DAILY_INTIMACY_CAP = 8
 
 function dayKey(now = Date.now()) {
   const d = new Date(now)

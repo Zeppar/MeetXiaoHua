@@ -7,6 +7,7 @@ const { formatDateTime, cardDisplayName } = require('../../utils/format')
 const { pickCardImage } = require('../../utils/card-media')
 const { intimacyView } = require('../../services/care-engine')
 const { roomOccupancy } = require('../../utils/room-mates')
+const { encounterCountOf, knownDaysOf, lastSeenOf, territoryOf } = require('../../utils/encounters')
 const nav = require('../../utils/navigate')
 const pageLoad = require('../../utils/page-load')
 
@@ -99,6 +100,35 @@ Page({
     this.__mxhUnloaded = true
   },
 
+  /** 分享猫卡 / 邀请好友接待它：好友打开后，这只猫会去好友的小屋串门 */
+  onShareAppMessage(e) {
+    const card = this.data.card || {}
+    const name = this.data.displayName || '一只小猫'
+    const place = String(card.placeText || '').trim()
+    const imageUrl = /^(wxfile|https?):/.test(this.data.displayImage || '') ? this.data.displayImage : undefined
+    const kind = e && e.target && e.target.dataset && e.target.dataset.kind
+    const fallback = {
+      title: place ? `我在${place}遇见了${name}` : `我遇见了${name}`,
+      path: '/pages/home/home',
+      imageUrl
+    }
+    if (kind !== 'invite') return fallback
+    const invite = {
+      title: `${name}想去你家串门`,
+      imageUrl,
+      path: '/pages/home/home'
+    }
+    return {
+      ...invite,
+      promise: api.createVisitInvite(this.cardId)
+        .then((res) => ({ ...invite, path: `/pages/room/room?invite=${encodeURIComponent(res.inviteId)}` }))
+        .catch((err) => {
+          wx.showToast({ title: (err && err.message) || '邀请没生成，先分享猫卡', icon: 'none' })
+          return fallback
+        })
+    }
+  },
+
   onShow() {
     this.load()
   },
@@ -120,7 +150,8 @@ Page({
       const named = withSavedName(card)
       const conf = Number(named.confidence) || 0
       const pending = isPendingBreed(named.breed)
-      const breedPending = named.breedReviewStatus === 'pending' || !!named.pendingBreed
+      // 品种不再审核：旧数据里残留的 pending 也当普通卡，重新选品种即可覆盖
+      const breedPending = false
       const bond = intimacyView(named)
       const cachedUser = cache.getCachedUser && cache.getCachedUser()
       const user =
@@ -140,6 +171,10 @@ Page({
         intimacyText: bond.text,
         intimacyValue: bond.value || 0,
         shotLabel: formatDateTime(named.shotAt),
+        encounterCount: encounterCountOf(named),
+        knownDays: knownDaysOf(named),
+        lastSeenLabel: encounterCountOf(named) > 1 ? formatDateTime(lastSeenOf(named)) : '',
+        territory: territoryOf(named),
         outingEntry: outingCopy.historyEntry((logs && logs.length) || 0),
         needPickBreed: pending && !breedPending,
         breedPending,
@@ -169,10 +204,6 @@ Page({
 
   onEditBreed() {
     if (!this.data.card) return
-    if (this.data.breedPending) {
-      wx.showToast({ title: '审核中，暂时不能换品种', icon: 'none' })
-      return
-    }
     this.setData({ showBreedPicker: true })
   },
 
@@ -184,22 +215,18 @@ Page({
     const breed = ((e && e.currentTarget && e.currentTarget.dataset.breed) || '').trim()
     if (!breed) return
     this.setData({ showBreedPicker: false })
-    if (this.data.breedPending) {
-      wx.showToast({ title: '审核中，暂时不能换品种', icon: 'none' })
-      return
-    }
     try {
       const res = await api.requestBreedChange(this.cardId, breed)
       const named = withSavedName(res.card || { ...(this.data.card || {}), breed })
       this.setData({
         card: named,
         displayName: cardDisplayName(named),
-        needPickBreed: isPendingBreed(named.breed) && named.breedReviewStatus !== 'pending',
-        breedPending: named.breedReviewStatus === 'pending',
-        pendingBreed: named.pendingBreed || '',
+        needPickBreed: isPendingBreed(named.breed),
+        breedPending: false,
+        pendingBreed: '',
         showConfidence: !isPendingBreed(named.breed)
       })
-      wx.showToast({ title: (res && res.toast) || '已提交', icon: 'none' })
+      wx.showToast({ title: (res && res.toast) || '品种已更新', icon: 'none' })
     } catch (err) {
       wx.showToast({ title: (err && err.message) || '提交失败', icon: 'none' })
     }
@@ -331,17 +358,13 @@ Page({
 
   onRelease() {
     if (!this.cardId || String(this.cardId).indexOf('debug_') === 0) {
-      wx.showToast({ title: '调试猫不能放生', icon: 'none' })
-      return
-    }
-    if (this.data.breedPending) {
-      wx.showToast({ title: '审核中不能放生', icon: 'none' })
+      wx.showToast({ title: '调试猫不能送去流浪', icon: 'none' })
       return
     }
     wx.showModal({
       title: copy.tips.releaseConfirmTitle,
       content: copy.tips.releaseConfirmBody,
-      confirmText: '放生',
+      confirmText: '送去流浪',
       confirmColor: '#c45a38',
       success: async (res) => {
         if (!res.confirm) return
@@ -355,7 +378,7 @@ Page({
           }, 500)
         } catch (err) {
           wx.hideLoading()
-          wx.showToast({ title: (err && err.message) || '放生失败', icon: 'none' })
+          wx.showToast({ title: (err && err.message) || '没送成，请重试', icon: 'none' })
         }
       }
     })

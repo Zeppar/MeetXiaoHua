@@ -422,3 +422,51 @@
   padding: 0 32rpx;
   font-size: var(--font-md);
 }
+
+/* 熟面孔统计 */
+.faces {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: var(--space-3) var(--space-2);
+  margin-top: var(--space-3);
+}
+.face-stat {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+}
+.face-num {
+  font-size: var(--font-xl);
+  font-weight: 700;
+  color: var(--color-title);
+}
+.face-k {
+  font-size: var(--font-xs);
+  color: var(--color-text-2);
+}
+.face-sep {
+  width: 2rpx;
+  height: 56rpx;
+  background: var(--color-line);
+}
+.faces-hint {
+  display: block;
+  margin-top: var(--space-2);
+  text-align: center;
+}
+/* 格子右上角：遇见次数 */
+.tile-count {
+  position: absolute;
+  top: 12rpx;
+  right: 12rpx;
+  padding: 2rpx 12rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-blush-soft);
+  color: var(--color-blush-ink);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}

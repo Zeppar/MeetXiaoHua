@@ -260,22 +260,73 @@ module.exports = { km: km, clean: clean };
         </view>
       </view>
 
-      <!-- 照顾：状态小条 + 圆形动作按钮 -->
-      <view wx:elif="{{hasDisplay}}" class="tray paper">
-        <view class="needs" hover-class="tap-press" catchtap="onToggleCareDetail">
-          <view
-            wx:for="{{careBars}}"
-            wx:key="key"
-            class="need {{careHint.key === item.key ? 'need-low' : ''}}"
-          >
-            <image class="need-ico" src="/assets/art/room-{{item.key}}.svg" mode="aspectFit" />
-            <text wx:if="{{showCareDetail || showRing}}" class="need-label">{{item.label}}</text>
-            <view class="need-track">
-              <view class="need-fill need-fill-{{item.key}}" style="width: {{item.value}}%;"></view>
-            </view>
-            <text wx:if="{{showCareDetail || showRing}}" class="need-val num">{{item.value}}</text>
+      <!-- 底部面板一次只讲一件事：未读明信片 > 来访猫 > 日常照顾。点猫或点「照顾」切回照顾面板 -->
+      <view wx:elif="{{unreadBadge && !careFocus && !showRing}}" class="tray paper focus anim-rise">
+        <view class="focus-head">
+          <image class="focus-ico" src="/assets/art/room-letter.svg" mode="aspectFit" />
+          <view class="focus-text">
+            <view class="focus-title">它回来了，带回一张明信片</view>
+            <view class="focus-sub">看看它这趟去了哪儿</view>
           </view>
         </view>
+        <button class="btn-primary btn-block focus-main" bindtap="onOpenReport">看看明信片</button>
+        <view wx:if="{{hasDisplay}}" class="focus-switch" hover-class="tap-press" bindtap="onFocusCare">照顾小猫 ›</view>
+      </view>
+
+      <view wx:elif="{{visitor && !careFocus && !showRing}}" class="tray paper focus anim-rise">
+        <view class="focus-head">
+          <image
+            wx:if="{{visitor.cutoutPath}}"
+            class="focus-cat sticker"
+            src="{{visitor.cutoutPath}}"
+            mode="aspectFit"
+          />
+          <image wx:else class="focus-cat visitor-ghost" src="/assets/art/cat-shadow.svg" mode="aspectFit" />
+          <view class="focus-text">
+            <view class="focus-row">
+              <text class="focus-title">{{visitor.fromReleased ? '有只流浪猫来了' : '有猫来串门了'}}</text>
+              <text class="seal {{visitor.fromReleased ? 'seal-blush' : 'seal-sky'}}">{{visitor.fromReleased ? '流浪来访' : '来串门'}}</text>
+            </view>
+            <view class="focus-sub">来自 {{visitor.distanceLabel}}</view>
+          </view>
+        </view>
+        <view wx:if="{{visitor.behaviorText}}" class="vs-behavior hand focus-behavior">{{visitor.behaviorText}}</view>
+        <view class="vs-ops focus-ops">
+          <button
+            class="btn-secondary vs-btn {{visitor.petByHost ? 'vs-done' : ''}}"
+            disabled="{{visitor.petByHost}}"
+            data-action="pet"
+            catchtap="onInteract"
+          >{{visitor.petByHost ? btnPetted : btnPet}}</button>
+          <button
+            class="btn-secondary vs-btn {{visitor.fedByHost ? 'vs-done' : ''}}"
+            disabled="{{visitor.fedByHost}}"
+            data-action="feed"
+            catchtap="onInteract"
+          >{{visitor.fedByHost ? btnFedDone : btnFed}}</button>
+        </view>
+        <button wx:if="{{visitor.canAdopt}}" class="btn-primary btn-block vs-adopt" catchtap="onAdoptVisitor">收下它的卡片</button>
+        <view wx:if="{{hasDisplay}}" class="focus-switch" hover-class="tap-press" bindtap="onFocusCare">照顾小猫 ›</view>
+      </view>
+
+      <!-- 照顾：状态小条 + 圆形动作按钮 -->
+      <view wx:elif="{{hasDisplay}}" class="tray paper">
+        <view
+          wx:if="{{(unreadBadge || visitor) && !showRing}}"
+          class="focus-back"
+          hover-class="tap-press"
+          bindtap="onFocusEvent"
+        >‹ {{unreadBadge ? '有一张新明信片' : '有猫在串门'}}</view>
+        <!-- 只看一个亲密度：真实再遇见涨得多，小屋里摸摸喂喂涨一点 -->
+        <view class="bond-line">
+          <image class="bond-ico" src="/assets/art/room-mood.svg" mode="aspectFit" />
+          <text class="bond-k">亲密度</text>
+          <view class="need-track bond-track">
+            <view class="need-fill need-fill-mood" style="width: {{intimacyValue}}%;"></view>
+          </view>
+          <text class="bond-v num">{{intimacyValue}}</text>
+        </view>
+        <view wx:if="{{roomEvent && !showRing}}" class="room-event hand">{{roomEvent}}</view>
 
         <view wx:if="{{showRing}}" class="acts">
           <view
@@ -311,7 +362,7 @@ module.exports = { km: km, clean: clean };
     <view class="sheet-panel" catchtap="noop">
       <view class="sheet-grip"></view>
       <view class="sheet-title">选择背景</view>
-      <view class="sheet-sub">遇见更多不同品种，就能解锁新的小屋</view>
+      <view class="sheet-sub">多出门遇见猫、再遇见熟面孔，就能解锁新的小屋</view>
       <view class="bg-grid">
         <view
           wx:for="{{backgrounds}}"
@@ -378,7 +429,7 @@ module.exports = { km: km, clean: clean };
         wx:if="{{visitor.canAdopt}}"
         class="btn-primary btn-block vs-adopt"
         catchtap="onAdoptVisitor"
-      >收养它</button>
+      >收下它的卡片</button>
     </view>
   </view>
 
@@ -394,6 +445,7 @@ module.exports = { km: km, clean: clean };
       <view class="card-line">{{report.distanceLine}}</view>
       <outing-postcard postcard="{{report.postcard}}" />
       <button class="btn-primary btn-block card-btn" bindtap="onDismissReport">收下明信片</button>
+      <button class="btn-ghost btn-block card-share" open-type="share" data-kind="postcard">分享给朋友</button>
     </view>
   </view>
 

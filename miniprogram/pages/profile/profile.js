@@ -1,4 +1,5 @@
 const api = require('../../services/api')
+const { encounterSummary } = require('../../utils/encounters')
 const copy = require('../../constants/copy')
 const nav = require('../../utils/navigate')
 
@@ -11,6 +12,7 @@ Page({
       breedCount: 0,
       memoryCount: 0
     },
+    encounterTotal: 0,
     pageLoading: false,
     loadingText: copy.tips.pageLoading
   },
@@ -35,11 +37,14 @@ Page({
       avatarLetter: nick.slice(0, 1),
       stats: user.stats || { cardCount: 0, breedCount: 0, memoryCount: 0 }
     })
+    try {
+      const { cards } = await api.listCards({})
+      this.setData({ encounterTotal: encounterSummary(cards || []).encounterTotal })
+    } catch (e) {
+      /* 读不到就保留上次的数 */
+    }
   },
 
-  onBreedReview() {
-    nav.navigateTo(this, '/pages/breed-review/breed-review')
-  },
 
   onVisitLog() {
     nav.navigateTo(this, '/pages/visit-log/visit-log')

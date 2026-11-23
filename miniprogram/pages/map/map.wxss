@@ -747,3 +747,8 @@
   flex: 1;
   margin: 0 12rpx;
 }
+
+/* 未标注地点：底部补地点按钮 */
+.unlocated-fill {
+  margin-top: var(--space-2);
+}

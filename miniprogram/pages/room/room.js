@@ -8,6 +8,7 @@ const { ACTION_LIST, toBars, DEFAULT_CARE, intimacyView } = require('../../servi
 const { cardDisplayName } = require('../../utils/format')
 const { pickCardImage } = require('../../utils/card-media')
 const { formatOutingPostcard } = require('../../utils/outing-postcard')
+const { encounterSummary } = require('../../utils/encounters')
 const { blurCoordinate, getCurrentPosition } = require('../../utils/geo-blur')
 const nav = require('../../utils/navigate')
 const pageLoad = require('../../utils/page-load')
@@ -48,6 +49,27 @@ function careHintFromBars(bars) {
     value: Math.round(Number(worst.value) || 0),
     color: worst.color || '#2fd074'
   }
+}
+
+/** 小屋随机小事件：替代原来的四条护理属性，只图一乐，不影响数值 */
+const ROOM_EVENTS = [
+  '它在窗台上晒了一会儿太阳。',
+  '它把小毛球拨到了沙发底下。',
+  '它打了个大大的哈欠。',
+  '它盯着窗外的小鸟看了好久。',
+  '它把自己团成了一个圆。',
+  '它在猫窝里踩了半天奶。',
+  '它舔了舔爪子，又洗了把脸。',
+  '它在地毯上打了个滚。'
+]
+
+function pickRoomEvent(cardId) {
+  if (!cardId) return ''
+  // 同一只猫一个小时内说同一件事，避免每次刷新都换
+  const hour = Math.floor(Date.now() / 3600000)
+  let h = hour
+  for (let i = 0; i < cardId.length; i++) h = (h * 31 + cardId.charCodeAt(i)) % 100003
+  return ROOM_EVENTS[h % ROOM_EVENTS.length]
 }
 
 Page({
@@ -105,6 +127,8 @@ Page({
     dragId: '',
     showRing: false,
     showVisitorMenu: false,
+    /** true：用户主动切到照顾面板，暂时不让明信片 / 来访占底部 */
+    careFocus: false,
     ringActions: ACTION_LIST,
     catX: 38,
     catY: 52,
@@ -127,7 +151,9 @@ Page({
   _catAiTimer: null,
   _catAiAlive: false,
 
-  onLoad() {
+  onLoad(query) {
+    // 好友分享的「来我家串门」邀请：进页后接待它
+    this._pendingInvite = (query && query.invite) || ''
     try {
       const win = (wx.getWindowInfo && wx.getWindowInfo()) || {}
       const menu = wx.getMenuButtonBoundingClientRect()
@@ -161,6 +187,32 @@ Page({
       this.setData({ debugForceHasCat: null, debugLabel: this.debugLabelOf(null) })
     }
     this.refresh()
+    if (this._pendingInvite) this._acceptInvite()
+  },
+
+  async _acceptInvite() {
+    const inviteId = this._pendingInvite
+    this._pendingInvite = ''
+    try {
+      const res = await api.acceptVisitInvite(inviteId)
+      if (res && res.toast) wx.showToast({ title: res.toast, icon: 'none' })
+      this.refresh()
+    } catch (err) {
+      wx.showToast({ title: (err && err.message) || '没接到好友的猫', icon: 'none' })
+    }
+  },
+
+  /** 分享明信片 / 邀请好友来看小屋 */
+  onShareAppMessage(e) {
+    const kind = e && e.target && e.target.dataset && e.target.dataset.kind
+    const report = this.data.report
+    if (kind === 'postcard' && report) {
+      return {
+        title: report.distanceLine || '我的猫出门回来，带回一张明信片',
+        path: '/pages/home/home'
+      }
+    }
+    return { title: '来看看我的猫咪小屋', path: '/pages/home/home' }
   },
 
   _stopCatAi() {
@@ -454,16 +506,12 @@ Page({
     const force = this.data.debugForceHasCat
     const [{ cards }, room] = await Promise.all([api.listCards({}), api.getRoomState()])
     const user = room.user || {}
-    // 有效品种：排除待识别，避免「两只都待识别」却以为有 2 品种
-    const distinctBreeds = new Set(
-      (cards || [])
-        .map((c) => String((c && c.breed) || '').trim())
-        .filter((b) => b && b !== '待识别' && b !== '识别中…' && b !== '未知小动物')
-    ).size
+    // 背景按「一共遇见几次」解锁：真实再遇见同一只猫也算
+    const encounterTotal = encounterSummary(cards || []).encounterTotal
     const currentBgId = user.roomBackgroundId || 'default'
     const backgrounds = BACKGROUNDS.map((b) => {
-      const unlocked = isUnlocked(b, distinctBreeds)
-      const need = getUnlockNeed(b, distinctBreeds)
+      const unlocked = isUnlocked(b, encounterTotal)
+      const need = getUnlockNeed(b, encounterTotal)
       return {
         ...b,
         unlocked,
@@ -471,7 +519,7 @@ Page({
         lockText: unlocked
           ? ''
           : copy.tips.unlockBgProgress
-            ? copy.tips.unlockBgProgress(distinctBreeds, b.unlockDistinctBreeds)
+            ? copy.tips.unlockBgProgress(encounterTotal, b.unlockEncounters)
             : copy.tips.unlockBg(need),
         preview: `linear-gradient(160deg, ${b.colors.join(',')})`
       }
@@ -629,6 +677,15 @@ Page({
       ready: true
     }
 
+    patch.roomEvent = pickRoomEvent(patch.displayCardId || '')
+
+    // 来了新访客或新明信片时，底部面板重新让它当主角
+    const focusKey = `${room.unreadBadge ? 'r' : ''}|${(room.visitor && room.visitor.id) || ''}`
+    if (focusKey !== this._focusKey) {
+      this._focusKey = focusKey
+      patch.careFocus = false
+    }
+
     if (room.autoShowReport && room.unreadReport && !this.data.showReport) {
       patch.showReport = true
       patch.report = { ...room.unreadReport, postcard: formatOutingPostcard(room.unreadReport) }
@@ -668,6 +725,16 @@ Page({
 
   onToggleCareDetail() {
     this.setData({ showCareDetail: !this.data.showCareDetail })
+  },
+
+  /** 底部面板：从明信片 / 来访切到照顾 */
+  onFocusCare() {
+    this.setData({ careFocus: true })
+  },
+
+  /** 底部面板：从照顾切回明信片 / 来访 */
+  onFocusEvent() {
+    this.setData({ careFocus: false, showRing: false, showCareDetail: false })
   },
 
   onSceneTap() {
@@ -825,28 +892,17 @@ Page({
     const visitor = this.data.visitor
     if (!visitor || !visitor.canAdopt || this._visitorBusy) return
     wx.showModal({
-      title: '收养这只猫？',
-      content: '收养后它会进入你的图鉴，原主人那边会显示「已被收养」。需要定位以便留下足迹。',
-      confirmText: '收养',
+      title: '收下它的卡片？',
+      content: '收下后这张卡片会进入你的图鉴，原来的主人那边会显示「卡片已被收下」。会尝试记下地点，不开定位也能收下。',
+      confirmText: '收下',
       success: async (res) => {
         if (!res.confirm || this._visitorBusy) return
         this._visitorBusy = true
-        wx.showLoading({ title: '收留中…', mask: true })
+        wx.showLoading({ title: '收下中…', mask: true })
         try {
+          // 定位可选：拿不到就先收下，之后在足迹页补地点
           const loc = await getCurrentPosition()
-          if (!loc) {
-            wx.hideLoading()
-            wx.showModal({
-              title: copy.modals.locationTitle,
-              content: '收养也需要位置权限，才能在足迹地图上留下它。',
-              confirmText: copy.buttons.goSettings,
-              success: (r) => {
-                if (r.confirm) wx.openSetting({})
-              }
-            })
-            return
-          }
-          const geo = blurCoordinate(loc.latitude, loc.longitude)
+          const geo = loc ? blurCoordinate(loc.latitude, loc.longitude) : null
           const out = await api.adoptVisitor({
             visitId: visitor.id,
             source: visitor.source,
@@ -854,12 +910,12 @@ Page({
             placeText: '我家门口'
           })
           wx.hideLoading()
-          wx.showToast({ title: (out && out.toast) || '已收养', icon: 'none' })
+          wx.showToast({ title: (out && out.toast) || '已收下', icon: 'none' })
           this.setData({ showVisitorMenu: false })
           this.refresh()
         } catch (err) {
           wx.hideLoading()
-          wx.showToast({ title: (err && err.message) || '收养失败', icon: 'none' })
+          wx.showToast({ title: (err && err.message) || '没收成，请重试', icon: 'none' })
         } finally {
           this._visitorBusy = false
         }

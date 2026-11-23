@@ -6,7 +6,7 @@
         <image class="nav-btn-ico" src="/assets/icons/outing.svg" mode="aspectFit" />
       </view>
       <text class="nav-title">我的图鉴</text>
-      <view class="nav-link" hover-class="tap-press" catchtap="onReleased" aria-role="button" aria-label="我放生的猫">放生记录</view>
+      <view class="nav-link" hover-class="tap-press" catchtap="onReleased" aria-role="button" aria-label="流浪中的卡片">流浪的卡片</view>
     </view>
   </view>
   <view class="page album-page" style="padding-top: {{navPad}}px;">
@@ -43,7 +43,7 @@
         </view>
 
         <view class="feature-meta">
-          <text wx:if="{{featured.placeText}}" class="feature-place">在 {{featured.placeText}} 遇见</text>
+          <text class="feature-place">遇见 {{featured.encounterCount}} 次 · 认识 {{featured.knownDays || 1}} 天{{featured.territory ? (' · 地盘：' + featured.territory) : ''}}</text>
           <text class="tiny feature-hint">轻点照片，翻开它的日记</text>
         </view>
 
@@ -66,58 +66,37 @@
           </view>
           <view class="info-row" hover-class="tap-press" catchtap="onRelease">
             <text class="info-k">去向</text>
-            <text class="info-v {{featured.breedPending ? 'is-muted' : ''}}">{{featured.breedPending ? '审核中，先不能放生' : '放它回到街角'}}</text>
+            <text class="info-v {{featured.breedPending ? 'is-muted' : ''}}">送它的卡片去街角流浪</text>
             <text wx:if="{{featured.breedPending}}" class="seal seal-muted">审核中</text>
-            <text wx:else class="info-act info-act-quiet">放生</text>
+            <text wx:else class="info-act info-act-quiet">送去流浪</text>
           </view>
         </view>
       </view>
 
-      <!-- 收集进度：每个品种一格 -->
-      <view class="section-head">
-        <view class="section-title"><text>已遇见 </text><text class="collect-num marker">{{collection.have}}</text><text> / {{collection.total}} 种猫</text></view>
-        <text class="tiny">{{collection.have >= collection.total ? '全部集齐啦' : '街角还有新朋友'}}</text>
-      </view>
-      <view class="collect paper anim-rise delay-1">
-        <view class="bar collect-bar">
-          <view class="bar-fill" style="width: {{collection.percent}}%;"></view>
+      <!-- 熟面孔：认识几只、一共遇见几次 -->
+      <view class="faces paper anim-rise delay-1">
+        <view class="face-stat">
+          <text class="face-num num marker">{{faces.catCount}}</text>
+          <text class="face-k">只熟面孔</text>
         </view>
-        <view class="slots">
-          <view
-            wx:for="{{collection.breeds}}"
-            wx:key="name"
-            class="slot {{item.met ? 'slot-met' : ''}}"
-          >
-            <view class="slot-pic">
-              <image
-                class="slot-illus {{item.met ? '' : 'slot-illus-off'}}"
-                src="{{item.met ? '/assets/art/cat-sit.svg' : '/assets/art/cat-shadow.svg'}}"
-                mode="aspectFit"
-              />
-            </view>
-            <text class="slot-name ellipsis {{item.met ? 'marker' : ''}}">{{item.name}}</text>
-          </view>
+        <view class="face-sep"></view>
+        <view class="face-stat">
+          <text class="face-num num">{{faces.encounterTotal}}</text>
+          <text class="face-k">次遇见</text>
+        </view>
+        <view class="face-sep"></view>
+        <view class="face-stat">
+          <text class="face-num num">{{faces.longestDays}}</text>
+          <text class="face-k">天最久的交情</text>
         </view>
       </view>
+      <view class="tiny faces-hint">{{faces.regulars ? ('有 ' + faces.regulars + ' 只你不止见过一次') : '再遇见同一只猫时拍下来，它就成了你的熟面孔'}}</view>
 
-      <!-- 我的猫：品种筛选 + 贴纸格子 -->
+      <!-- 我的猫：每一只都是一份档案 -->
       <view class="section-head">
         <text class="section-title">我的猫</text>
         <text class="tiny">{{cards.length}} 只</text>
       </view>
-      <scroll-view wx:if="{{filters.length}}" class="chips" scroll-x enable-flex show-scrollbar="{{false}}">
-        <view
-          wx:for="{{filters}}"
-          wx:key="breed"
-          class="chip chip-item {{(item.breed === '全部' ? !breedFilter : breedFilter === item.breed) ? 'chip-on' : ''}}"
-          hover-class="tap-press"
-          data-breed="{{item.breed}}"
-          bindtap="onFilter"
-        >
-          <text>{{item.breed}}</text>
-          <text wx:if="{{item.count}}" class="chip-count">{{item.count}}</text>
-        </view>
-      </scroll-view>
 
       <view class="grid">
         <view
@@ -149,6 +128,7 @@
             </view>
           </view>
           <view wx:if="{{item.inRoom}}" class="seal seal-mint tile-seal">{{item.roomBadge || '在小屋'}}</view>
+          <view wx:if="{{item.encounterCount > 1}}" class="tile-count num">×{{item.encounterCount}}</view>
           <view class="tile-name ellipsis {{item.hasName ? '' : 'is-muted'}}">{{item.displayName}}</view>
         </view>
       </view>

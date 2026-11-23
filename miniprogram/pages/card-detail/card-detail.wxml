@@ -30,10 +30,14 @@
         <text wx:else class="mini-act">{{needPickBreed ? '选品种' : '换品种'}}</text>
       </view>
 
-      <view wx:if="{{breedPending}}" class="tip">审核中，暂时不能再换品种{{recognizedBreed ? (' · 识别结果：' + recognizedBreed) : ''}}</view>
-      <view wx:if="{{breedPending}}" class="review-row">
-        <button class="btn-ghost btn-sm" bindtap="onApproveBreed">通过审核（调试）</button>
+      <view wx:if="{{recognizedBreed && recognizedBreed !== card.breed}}" class="tip">识别结果：{{recognizedBreed}}</view>
+
+      <!-- 熟面孔：遇见几次、认识几天、它的地盘 -->
+      <view class="faces-line">
+        <text class="seal seal-blush">第 {{encounterCount}} 次遇见</text>
+        <text class="tiny">认识 {{knownDays || 1}} 天{{lastSeenLabel ? (' · 最近一次 ' + lastSeenLabel) : ''}}</text>
       </view>
+      <view wx:if="{{territory}}" class="tiny faces-territory">它的地盘：{{territory}}</view>
 
       <!-- 相遇信息 -->
       <view class="meta">
@@ -107,7 +111,11 @@
           <button class="btn-secondary grow" bindtap="onRemoveFromRoom">{{removeFromRoom}}</button>
         </view>
       </block>
-      <button class="btn-ghost btn-block release-btn {{breedPending ? 'is-disabled' : ''}}" bindtap="onRelease">{{breedPending ? '审核中，先不能放生' : (releaseCat + '，让它回到街角')}}</button>
+      <view class="action-pair share-pair">
+        <button class="btn-secondary grow" open-type="share" data-kind="invite">邀请好友接待它</button>
+        <button class="btn-secondary grow" open-type="share" data-kind="card">分享猫卡</button>
+      </view>
+      <button class="btn-ghost btn-block release-btn" bindtap="onRelease">{{releaseCat}}</button>
     </view>
 
     <text-modal

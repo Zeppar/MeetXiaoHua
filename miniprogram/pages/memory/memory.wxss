@@ -53,6 +53,7 @@
   display: flex;
   height: 56rpx;
   align-items: center;
+  gap: 12rpx;
 }
 
 .entry-text {

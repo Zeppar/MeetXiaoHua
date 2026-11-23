@@ -3,6 +3,18 @@ const copy = require('../../constants/copy')
 const { formatDateTime, cardDisplayName } = require('../../utils/format')
 const pageLoad = require('../../utils/page-load')
 
+/** 拍照页确认「是它」存下的记忆 = 再遇见：按时间编号，建卡那次算第 1 次 */
+function withEncounterLabels(memories) {
+  const order = memories
+    .filter((m) => m && m.encounter)
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+    .map((m) => m._id)
+  return memories.map((m) => {
+    const k = order.indexOf(m._id)
+    return k >= 0 ? { ...m, encounterLabel: `第 ${k + 2} 次遇见` } : m
+  })
+}
+
 Page({
   data: {
     card: null,
@@ -51,7 +63,7 @@ Page({
         card,
         displayName: cardDisplayName(card),
         displayImage: (card && (card.cutoutPath || card.originalPath)) || '',
-        memories: (memories || []).map((m) => ({
+        memories: withEncounterLabels(memories || []).map((m) => ({
           ...m,
           imagePath: m.imageFileId || m.imagePath || '',
           timeLabel: formatDateTime(m.createdAt)

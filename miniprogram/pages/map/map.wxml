@@ -53,9 +53,9 @@
     class="chip repair-chip"
     style="top: {{chipTop + 72}}px;"
     hover-class="tap-press"
-    bindtap="onRepairFootprints"
+    bindtap="onShowUnlocated"
   >
-    <text>还有 {{albumCount - footprintCount}} 只缺足迹，点此补齐</text>
+    <text>未标注地点 {{albumCount - footprintCount}} 只 · 查看</text>
   </view>
 
   <view class="side-tools">
@@ -122,6 +122,7 @@
         </view>
         <view class="sheet-foot-space"></view>
       </scroll-view>
+      <button wx:if="{{clusterSheet.unlocated}}" class="btn-secondary btn-block unlocated-fill" bindtap="onRepairFootprints">用我现在的位置补上</button>
     </view>
   </view>
 

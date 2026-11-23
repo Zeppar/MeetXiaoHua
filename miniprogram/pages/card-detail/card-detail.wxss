@@ -284,3 +284,21 @@
   padding: 0 32rpx;
   font-size: var(--font-md);
 }
+
+/* 熟面孔 */
+.faces-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: var(--space-2);
+}
+.faces-territory {
+  display: block;
+  margin-top: 8rpx;
+}
+
+/* 分享 / 邀请 */
+.share-pair {
+  margin-top: var(--space-2);
+}

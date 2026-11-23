@@ -19,7 +19,9 @@ function formatOutingPostcard(entry, options = {}) {
   const parts = [MOMENTS[index] || behavior]
   if (entry.pet) parts.push('它舒服地挨了几下摸摸。')
   if (entry.fed) parts.push('还蹭到了一颗猫粮。')
-  if (entry.adopted) parts.push('这次，它有了一个新家。')
+  if (entry.adopted) parts.push('这次，它的卡片被人收下了。')
+  // 它的地盘：用模糊过的相遇地点，给出门找它一个理由
+  if (entry.territory && !options.inbound) parts.push(`听说它最近常在「${entry.territory}」一带出没，出门时留意一下。`)
   if (entry.pet === undefined && entry.fed === undefined && entry.interactLine) {
     parts.push(entry.interactLine)
   }

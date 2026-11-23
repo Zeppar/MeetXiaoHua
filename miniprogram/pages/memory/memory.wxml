@@ -22,6 +22,7 @@
     >
       <view class="entry-head">
         <text class="tag tag-blush">{{item.timeLabel}}</text>
+        <text wx:if="{{item.encounterLabel}}" class="seal seal-blush">{{item.encounterLabel}}</text>
       </view>
       <view class="entry-text hand">{{item.text}}</view>
       <view

@@ -26,8 +26,8 @@
       </view>
       <view class="hs-sep"></view>
       <view class="hs grow">
-        <text class="hs-num num">{{breedCount}}</text>
-        <text class="hs-unit">/ {{breedTotal}} 个品种</text>
+        <text class="hs-num num">{{encounterTotal}}</text>
+        <text class="hs-unit">次遇见</text>
       </view>
     </view>
     <button class="btn-primary btn-block" bindtap="onMeet">

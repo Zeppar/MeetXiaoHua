@@ -11,6 +11,7 @@ const {
   COPY
 } = require('../constants/outing')
 const { pickCardImage } = require('../utils/card-media')
+const { territoryOf } = require('../utils/encounters')
 
 function defaultSettings() {
   return {
@@ -74,6 +75,7 @@ function buildReport(outing, card, showDistance, log) {
     distanceLine: card.name ? `${card.name}去了一趟「${distLabel}」` : COPY.reportDistance(card.breed || '小猫', distLabel),
     behaviorLine: outing.behaviorText || '',
     interactLine,
+    territory: territoryOf(card),
     behaviorIndex: log.behaviorIndex,
     catImage: log.catImage,
     friend: log.friend,
