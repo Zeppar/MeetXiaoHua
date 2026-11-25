@@ -4,6 +4,7 @@
  */
 const cloud = require('wx-server-sdk')
 const { normalizePhotoIdentity, appendIdentity } = require('./photo-identity')
+const security = require('./security')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
@@ -16,6 +17,15 @@ const WHITELIST = [
 ]
 const UNKNOWN_LABEL = '未知小动物'
 const CONFIDENCE_THRESHOLD = 70
+
+/** 小屋分身的毛色：三种颜色 + 花纹，只收合法的十六进制色 */
+function normalizeCoat(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const ok = (v) => /^#[0-9a-f]{6}$/.test(String(v || '').toLowerCase())
+  if (!ok(raw.body) || !ok(raw.belly) || !ok(raw.stripe)) return null
+  const pattern = clampText(String(raw.pattern || 'solid'), 20)
+  return { body: raw.body.toLowerCase(), belly: raw.belly.toLowerCase(), stripe: raw.stripe.toLowerCase(), pattern }
+}
 
 function clampText(text, max) {
   const s = String(text || '').trim()
@@ -178,8 +188,14 @@ async function getProfile(openid) {
 }
 
 async function updateProfile(openid, payload = {}) {
+  if (payload.nickName !== undefined) {
+    const { pass } = await security.checkText(openid, clampText(payload.nickName, 20))
+    if (!pass) return { error: '昵称里有不合适的内容，换一个吧', code: 'CONTENT_RISKY' }
+  }
   const user = await ensureUser(openid)
   const data = {}
+  // 小屋显示模式：cartoon 卡通分身 / photo 真猫贴纸
+  if (payload.roomStyle !== undefined) data.roomStyle = payload.roomStyle === 'photo' ? 'photo' : 'cartoon'
   ;['nickName', 'avatarUrl', 'displayCardId', 'roomBackgroundId', 'privacyAgreedAt', 'fuzzyGeo'].forEach((k) => {
     if (payload[k] !== undefined) data[k] = payload[k]
   })
@@ -235,9 +251,50 @@ async function recognize(event = {}) {
   return result
 }
 
+/** 每人每天抠图上限：防止被刷爆 GPU 费用；可用环境变量 MATTING_DAILY_LIMIT 调整，0 表示不限 */
+function mattingDailyLimit() {
+  const local = require('./recognize-config').loadLocalSecrets()
+  const n = Number(process.env.MATTING_DAILY_LIMIT || local.MATTING_DAILY_LIMIT || 60)
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 60
+}
+
+/**
+ * 计一次当天用量，超过上限返回 false。
+ * 数据库出问题时放行（不能因为计数失败挡住正常用户）。
+ */
+async function takeDailyQuota(openid, key, limit) {
+  if (!openid || !limit) return true
+  const day = todayKey()
+  const id = `${key}_${day}_${openid}`.replace(/[^\w-]/g, '_').slice(0, 120)
+  const ref = db.collection('usage_daily').doc(id)
+  try {
+    let current = await readDocument(ref).catch(() => null)
+    if (!current) {
+      try {
+        await ref.set({ data: { _openid: openid, key, day, count: 1, updatedAt: Date.now() } })
+        return true
+      } catch (e) {
+        await db.createCollection('usage_daily').catch(() => {})
+        await ref.set({ data: { _openid: openid, key, day, count: 1, updatedAt: Date.now() } })
+        return true
+      }
+    }
+    if ((current.count || 0) >= limit) return false
+    await ref.update({ data: { count: _.inc(1), updatedAt: Date.now() } })
+    return true
+  } catch (e) {
+    console.warn('[quota] fail, allow', key, e && e.message)
+    return true
+  }
+}
+
 async function runMatting(event = {}, openid = '') {
   const started = Date.now()
   console.log('[api.matting timing] enter')
+  const limit = mattingDailyLimit()
+  if (!(await takeDailyQuota(openid, 'matting', limit))) {
+    return { ok: false, code: 'DAILY_LIMIT', message: `今天已经抠了 ${limit} 张，明天再来吧`, provider: event.provider || '' }
+  }
   const { matting } = require('./matting')
   let imageBase64 = event.imageBase64 || ''
   const imageUrl = event.imageUrl || ''
@@ -445,6 +502,12 @@ async function createCard(openid, payload = {}) {
       /* ignore */
     }
   }
+  // 名字、地点会给别人看：没过内容安全就清空，不挡住保存
+  const blockedText = await security.checkTexts(openid, { name: doc.name, placeText: doc.placeText })
+  blockedText.forEach((k) => { doc[k] = '' })
+  if (blockedText.length) doc.textBlocked = true
+  doc.mediaTraceId = await security.submitImageCheck(openid, doc.cutoutFileId || doc.originalFileId)
+  doc.mediaRisky = false
   const addRes = await db.collection('cards').add({ data: doc })
   if (doc.pendingBreed) {
     const rev = await db.collection('breed_reviews').add({
@@ -482,6 +545,7 @@ function buildCard(openid, payload, geo) {
     cutoutPath: payload.cutoutPath || '',
     originalPath: payload.originalPath || '',
     photoIdentities: appendIdentity([], normalizePhotoIdentity(payload.photoIdentity)),
+    coat: normalizeCoat(payload.coat),
     breed,
     recognizedBreed,
     pendingBreed,
@@ -509,6 +573,13 @@ async function updateCard(openid, cardId, patch = {}) {
   if (!card || !cardBelongsTo(card, openid)) return { error: 'card not found', code: 'NOT_FOUND' }
   const data = {}
   if (!card.ownerOpenId) data.ownerOpenId = openid
+  const blockedText = await security.checkTexts(openid, {
+    name: patch.name !== undefined ? clampText(patch.name, 12) : '',
+    placeText: patch.placeText !== undefined ? clampText(patch.placeText, 30) : ''
+  })
+  if (blockedText.length) {
+    return { error: blockedText.indexOf('name') >= 0 ? '名字里有不合适的内容，换一个吧' : '地点里有不合适的内容，换一个吧', code: 'CONTENT_RISKY' }
+  }
   if (patch.name !== undefined) data.name = clampText(patch.name, 12)
   // 品种仅允许审核通过后写入
   if (patch.breed !== undefined && patch._breedReviewApply) {
@@ -538,7 +609,15 @@ async function updateCard(openid, cardId, patch = {}) {
   if (patch.originalPath !== undefined) data.originalPath = patch.originalPath || ''
   if (patch.cutoutFileId !== undefined) data.cutoutFileId = patch.cutoutFileId || ''
   if (patch.originalFileId !== undefined) data.originalFileId = patch.originalFileId || ''
+  // 换了图：重新做图片内容安全检测
+  const newImage = (patch.cutoutFileId !== undefined && patch.cutoutFileId !== card.cutoutFileId && patch.cutoutFileId) ||
+    (patch.originalFileId !== undefined && patch.originalFileId !== card.originalFileId && !card.cutoutFileId && patch.originalFileId)
+  if (newImage) {
+    data.mediaTraceId = await security.submitImageCheck(openid, newImage)
+    data.mediaRisky = false
+  }
   if (patch.mattingFailed !== undefined) data.mattingFailed = !!patch.mattingFailed
+  if (patch.coat !== undefined) data.coat = _.set(normalizeCoat(patch.coat))
   if (patch.pendingBreed !== undefined) data.pendingBreed = patch.pendingBreed || ''
   if (patch.breedReviewStatus !== undefined) data.breedReviewStatus = patch.breedReviewStatus || ''
   if (patch.breedReviewId !== undefined) data.breedReviewId = patch.breedReviewId || ''
@@ -882,6 +961,7 @@ function buildReport(outing, card, showDistance, log) {
     distanceLine: `${card.name || '你的' + ((['待识别', '识别中…', '未知小动物'].indexOf(breed) >= 0 ? '' : breed) || '小猫')}去了一趟「${distLabel}」`,
     behaviorLine: outing.behaviorText || '',
     interactLine,
+    cardId: card._id || '',
     // 它的地盘：相遇地点文字（已模糊），明信片上提示用户出门找它
     territory: String(card.placeText || '').trim() === '已记录当前位置' ? '' : clampText(card.placeText || '', 30),
     catImage: log.catImage,
@@ -948,10 +1028,12 @@ async function releaseCard(openid, cardId) {
       cardId,
       breed: cat.breed || '待识别',
       name: cat.name || '',
-      cutoutPath: cat.cutoutPath || '',
-      originalPath: cat.originalPath || '',
-      cutoutFileId: cat.cutoutFileId || '',
-      originalFileId: cat.originalFileId || '',
+      // 流浪卡片会出现在别人小屋：图片没过内容安全就不带图
+      cutoutPath: cat.mediaRisky ? '' : cat.cutoutPath || '',
+      originalPath: cat.mediaRisky ? '' : cat.originalPath || '',
+      cutoutFileId: cat.mediaRisky ? '' : cat.cutoutFileId || '',
+      originalFileId: cat.mediaRisky ? '' : cat.originalFileId || '',
+      coat: cat.coat || null,
       releasedBy: openid,
       releasedAt: now,
       visitCount: 0,
@@ -1027,6 +1109,7 @@ async function maybeSpawnReleasedVisitor(openid, now) {
         releasedId: released._id,
         breed: released.breed || '待识别',
         name: released.name || '',
+        coat: released.coat || null,
         cutoutPath: released.cutoutFileId || released.cutoutPath || '',
         behaviorText,
         distanceKm: Math.round((0.5 + Math.random() * 7.5) * 10) / 10,
@@ -1277,10 +1360,11 @@ async function acceptVisitInvite(openid, { inviteId } = {}) {
       guestCardId: card._id,
       breed: card.breed || '小猫',
       name: card.name || '',
-      cutoutPath: card.cutoutFileId || card.cutoutPath || card.originalFileId || card.originalPath || '',
+      cutoutPath: card.mediaRisky ? '' : card.cutoutFileId || card.cutoutPath || card.originalFileId || card.originalPath || '',
       behaviorText: picked.text,
       behaviorIndex: picked.index,
       friend: null,
+      coat: card.coat || null,
       distanceKm: Math.round((0.5 + Math.random() * 7.5) * 10) / 10,
       arriveAt: now,
       leaveAt,
@@ -1310,6 +1394,122 @@ async function acceptVisitInvite(openid, { inviteId } = {}) {
     })
     return { ok: true, visitId: added._id, toast: '好友的猫来串门了' }
   })
+}
+
+// ================= 分享：好友点开能看到这只猫（只读，不含地点和备注） =================
+
+function cloudFileOf(path) {
+  return /^cloud:\/\//.test(path || '') ? path : ''
+}
+
+async function tempUrlOf(fileId) {
+  if (!fileId) return ''
+  try {
+    const res = await cloud.getTempFileURL({ fileList: [fileId] })
+    const file = res && res.fileList && res.fileList[0]
+    return (file && file.tempFileURL) || ''
+  } catch (e) {
+    return ''
+  }
+}
+
+/** 创建分享：猫卡（同一只猫复用同一个分享）或明信片（存一份快照） */
+async function createShare(openid, { kind, cardId, postcard } = {}) {
+  const { card } = await getCard(openid, cardId)
+  if (!card) return { error: '找不到这只猫', code: 'NOT_FOUND' }
+  const isPostcard = kind === 'postcard'
+  if (!isPostcard) {
+    try {
+      const found = await db.collection('card_shares')
+        .where({ _openid: openid, kind: 'card', cardId: card._id }).limit(1).get()
+      if (found.data && found.data[0]) return { shareId: found.data[0]._id }
+    } catch (e) {
+      /* 集合还没建：下面 add 时会自动建 */
+    }
+  }
+  const doc = { _openid: openid, kind: isPostcard ? 'postcard' : 'card', cardId: card._id, createdAt: Date.now() }
+  if (isPostcard) {
+    const p = postcard || {}
+    doc.postcard = {
+      title: clampText(p.title || '', 30),
+      line: clampText(p.line || '', 60),
+      story: clampText(p.story || '', 200)
+    }
+    // 明信片里有猫名、地点等用户文字：没过内容安全的段落不放进分享
+    const blocked = await security.checkTexts(openid, doc.postcard, security.SCENE.SOCIAL_LOG)
+    blocked.forEach((k) => { doc.postcard[k] = '' })
+  }
+  const added = await addWithCollection('card_shares', doc)
+  return { shareId: added._id }
+}
+
+/** 任何人凭分享 id 只读查看：名字、品种、贴纸、遇见次数；不给地点、备注、openid */
+async function getSharedCard(openid, { shareId } = {}) {
+  if (!shareId) return { error: '分享链接不完整', code: 'BAD_REQUEST' }
+  let share = null
+  try {
+    share = (await db.collection('card_shares').doc(shareId).get()).data
+  } catch (e) {
+    share = null
+  }
+  if (!share) return { error: '这张分享已经失效了', code: 'GONE' }
+  let card = null
+  try {
+    card = (await db.collection('cards').doc(share.cardId).get()).data
+  } catch (e) {
+    card = null
+  }
+  if (!card || !cardBelongsTo(card, share._openid)) {
+    return { error: '这只猫已经不在手帐里了', code: 'GONE' }
+  }
+  let owner = null
+  try {
+    const res = await db.collection('users').where({ _openid: share._openid }).limit(1).get()
+    owner = res.data && res.data[0]
+  } catch (e) {
+    owner = null
+  }
+  const image = card.mediaRisky ? '' : await tempUrlOf(
+    cloudFileOf(card.cutoutFileId) || cloudFileOf(card.cutoutPath) || cloudFileOf(card.originalFileId)
+  )
+  const count = Number(card.encounterCount)
+  const shotAt = Number(card.shotAt) || 0
+  return {
+    share: {
+      kind: share.kind || 'card',
+      isOwner: share._openid === openid,
+      cardId: share._openid === openid ? card._id : '',
+      ownerName: clampText((owner && owner.nickName) || '猫友', 12),
+      name: clampText(card.name || '', 12),
+      breed: card.breed || '',
+      image,
+      encounterCount: Number.isFinite(count) && count >= 1 ? Math.floor(count) : 1,
+      knownDays: shotAt ? Math.max(1, Math.floor((Date.now() - shotAt) / (24 * HOUR_MS)) + 1) : 1,
+      shotAt,
+      postcard: share.postcard || null
+    }
+  }
+}
+
+/** 海报上的小程序码：扫码直达分享查看页（scene 只放分享 id） */
+async function getShareQrCode(openid, { shareId, envVersion } = {}) {
+  if (!shareId || String(shareId).length > 32) return { error: '分享 id 不合法', code: 'BAD_REQUEST' }
+  let share = null
+  try {
+    share = (await db.collection('card_shares').doc(shareId).get()).data
+  } catch (e) {
+    share = null
+  }
+  if (!share || share._openid !== openid) return { error: '找不到这张分享', code: 'NOT_FOUND' }
+  const env = ['develop', 'trial', 'release'].indexOf(envVersion) >= 0 ? envVersion : 'release'
+  const res = await cloud.openapi.wxacode.getUnlimited({
+    scene: String(shareId),
+    page: 'pages/share-card/share-card',
+    checkPath: false,
+    envVersion: env,
+    width: 280
+  })
+  return { image: Buffer.from(res.buffer).toString('base64'), contentType: res.contentType || 'image/png' }
 }
 
 async function pickVisitHost(excludeOpenId) {
@@ -1378,8 +1578,8 @@ async function advanceOuting(openid, user, now) {
           hostOpenId, ownerOpenId: openid, guestCardId: cardId,
           breed: card.breed || '小猫',
           name: card.name || '',
-          cutoutPath: card.cutoutFileId || card.cutoutPath || card.originalFileId || card.originalPath || '',
-          behaviorText: picked.text, behaviorIndex: picked.index, friend,
+          cutoutPath: card.mediaRisky ? '' : card.cutoutFileId || card.cutoutPath || card.originalFileId || card.originalPath || '',
+          behaviorText: picked.text, behaviorIndex: picked.index, friend, coat: card.coat || null,
           distanceKm, arriveAt: now, leaveAt: now + visitDuration,
           status: 'active', petByHost: false, fedByHost: false, seenLeft: false
         }
@@ -1503,6 +1703,7 @@ async function tickAndGetRoomState(openid) {
           source: 'cloud',
           breed: activeVisitor.breed,
           cutoutPath: activeVisitor.cutoutPath,
+          coat: activeVisitor.coat || null,
           behaviorText: activeVisitor.behaviorText,
           distanceLabel: formatDistanceLabel(activeVisitor.distanceKm, showDistance),
           petByHost: !!activeVisitor.petByHost,
@@ -1641,7 +1842,20 @@ async function listVisitLogs(openid, { direction } = {}) {
   return { logs }
 }
 
+/** 图片内容安全回调：风险图标记后，不再出现在分享页、别人小屋里 */
+async function onMediaCheckResult(evt) {
+  if (!evt.risky) return { ok: true }
+  try {
+    await db.collection('cards').where({ mediaTraceId: evt.traceId }).update({ data: { mediaRisky: true } })
+  } catch (e) {
+    console.warn('[security] mark risky fail', evt.traceId, e && e.message)
+  }
+  return { ok: true }
+}
+
 exports.main = async (event) => {
+  const mediaEvt = security.parseMediaCheckEvent(event)
+  if (mediaEvt) return onMediaCheckResult(mediaEvt)
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
   const action = event.action
@@ -1657,6 +1871,12 @@ exports.main = async (event) => {
         return await recognize(event)
       case 'matting':
         return await runMatting(event, openid)
+      case 'createShare':
+        return await createShare(openid, event)
+      case 'getSharedCard':
+        return await getSharedCard(openid, event)
+      case 'getShareQrCode':
+        return await getShareQrCode(openid, event)
       case 'createVisitInvite':
         return await createVisitInvite(openid, event)
       case 'acceptVisitInvite':

@@ -51,6 +51,8 @@ module.exports = {
     locating: '正在获取相遇位置…',
     locationReady: '已记录当前位置',
     locationRequired: '没拿到定位，也可以先保存，之后在足迹里补',
+    locationDenied: '没开定位也没关系：可以在地图上选，或者直接保存',
+    placePicked: '地点选好了（会模糊到街区）',
     savedWithoutGeo: '已保存，没记地点，可以之后在足迹里补',
     mattingFailed: '（背景没抠干净，已用原图生成）',
     unknownHint: '这是一只小动物，但没认出具体品种',
@@ -72,7 +74,7 @@ module.exports = {
     notePlaceholder: '比如：蹲在便利店门口，不怕人',
     placeTitle: '在哪里遇到的它？',
     placePlaceholder: '比如：小区楼下、公司附近（可选）',
-    useLocation: '重新获取定位',
+    useLocation: '记下地点',
     locationTitle: '开启位置权限？',
     locationBody:
       '开启后会自动记下相遇位置（模糊到街区），猫才会出现在足迹地图上。不开也能保存，之后可以在足迹里补。',

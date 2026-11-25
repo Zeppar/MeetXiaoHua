@@ -41,6 +41,9 @@ from rembg import new_session, remove
 from rembg.sessions import sessions_names
 from scipy import ndimage
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cat_stylize import stylize  # noqa: E402  小屋画风化（方案 A）
+
 # Windows 控制台默认 cp1252，打印中文会直接抛 UnicodeEncodeError
 for _s in (sys.stdout, sys.stderr):
     try:
@@ -247,7 +250,7 @@ def faint_ratio(cut):
     return faint / max(1, solid + faint)
 
 
-def process(raw, model, border, alpha_matting, allow_fallback=True):
+def process(raw, model, border, alpha_matting, allow_fallback=True, style=""):
     timing = []
     t0 = time.time()
     img = load_image(raw)
@@ -272,7 +275,13 @@ def process(raw, model, border, alpha_matting, allow_fallback=True):
     rgba = np.asarray(cut.convert("RGBA"))
     bordered = False
     out_img = cut
-    if border:
+    if style == "doodle":
+        # 小屋画风：扁平填色 + 暖墨描边（自带描边，调用方不用再加白边）
+        kept = keep_main_region(rgba)
+        out_img = stylize(kept[0] if kept is not None else rgba)
+        bordered = True
+        timing.append("style: doodle")
+    elif border:
         kept = keep_main_region(rgba)
         if kept is not None:
             out_img = add_white_border(*kept)
@@ -382,10 +391,11 @@ class Handler(BaseHTTPRequestHandler):
         border = (qs.get("border") or ["0"])[0] in ("1", "true")
         alpha = (qs.get("a") or qs.get("alpha") or ["0"])[0] in ("1", "true")
         allow_fallback = (qs.get("fallback") or ["1"])[0] not in ("0", "false")
+        style = (qs.get("style") or [""])[0]
         started = time.time()
         try:
             raw = read_upload(self)
-            png, bordered, infer_ms, timing, uncertain = process(raw, model, border, alpha, allow_fallback)
+            png, bordered, infer_ms, timing, uncertain = process(raw, model, border, alpha, allow_fallback, style)
         except Exception as e:  # noqa: BLE001
             print("[rembg-server] fail", repr(e), flush=True)
             self.send_json(500, {"ok": False, "message": str(e) or "rembg fail"})

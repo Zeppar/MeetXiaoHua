@@ -76,6 +76,7 @@ function buildReport(outing, card, showDistance, log) {
     behaviorLine: outing.behaviorText || '',
     interactLine,
     territory: territoryOf(card),
+    cardId: card._id || '',
     behaviorIndex: log.behaviorIndex,
     catImage: log.catImage,
     friend: log.friend,

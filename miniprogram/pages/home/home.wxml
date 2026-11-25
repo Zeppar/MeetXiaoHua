@@ -7,6 +7,26 @@
     </view>
   </view>
 
+  <!-- 新用户：首屏只做一件事——拍一只猫 -->
+  <view wx:if="{{isNewbie}}" class="first anim-rise">
+    <view class="first-card paper">
+      <view class="tape tape-left"></view>
+      <image class="first-sticker sticker tilt-l" src="/assets/illus/cat-cutout-border.png" mode="aspectFit" />
+      <view class="stamp first-stamp anim-stamp">
+        <text class="stamp-k">遇见</text>
+        <text class="stamp-v">今天</text>
+      </view>
+    </view>
+    <view class="h1 first-title">街上遇到的猫，<text class="marker">拍一下</text>就是你的贴纸</view>
+    <view class="caption first-sub">自动抠图、描白边，收进你的猫咪手帐</view>
+    <button class="btn-primary btn-block first-cta" bindtap="onMeet">
+      <image class="cta-ico" src="/assets/icons/camera-white.svg" />
+      <text>拍一只猫</text>
+    </button>
+    <view class="first-album" hover-class="tap-press" bindtap="onMeetFromAlbum">身边没有猫？从相册选一张 ›</view>
+  </view>
+
+  <block wx:else>
   <!-- 今天 -->
   <view class="greet anim-rise">
     <view class="tiny">{{today}}</view>
@@ -36,7 +56,8 @@
     </button>
   </view>
 
-  <!-- 我的猫现在 -->
+  <!-- 我的猫现在：小屋解锁（有 2 只猫）后才出现 -->
+  <block wx:if="{{roomUnlocked}}">
   <view class="section-head">
     <text class="section-title">我的猫现在</text>
     <text class="section-link" bindtap="onRoom">去小屋</text>
@@ -83,6 +104,8 @@
     </view>
     <view class="list-arrow"></view>
   </view>
+
+  </block>
 
   <!-- 它回来了 / 有猫来过 -->
   <view wx:if="{{hasReport}}" class="postcard report anim-rise delay-3" hover-class="tap-press" bindtap="onRoom">
@@ -169,6 +192,8 @@
       <text class="tiny">出门与来访</text>
     </view>
   </view>
+
+  </block>
 
   <!-- 隐私弹窗 -->
   <view wx:if="{{showPrivacy}}" class="mask" catchtouchmove="noop">

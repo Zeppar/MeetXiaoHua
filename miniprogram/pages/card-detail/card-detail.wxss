@@ -302,3 +302,47 @@
 .share-pair {
   margin-top: var(--space-2);
 }
+
+/* 小屋未解锁提示 / 更多操作 */
+.room-hint {
+  display: block;
+  text-align: center;
+  margin-top: var(--space-2);
+}
+.more-link {
+  margin-top: var(--space-3);
+  padding: 12rpx;
+  text-align: center;
+  font-size: var(--font-sm);
+  color: var(--color-muted);
+}
+
+/* 补地点 */
+.place-card {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 2rpx dashed var(--color-line);
+  background: var(--color-sky-soft);
+}
+.place-title {
+  font-size: var(--font-md);
+  font-weight: 700;
+  color: var(--color-title);
+  margin-bottom: 4rpx;
+}
+.place-actions {
+  margin-top: var(--space-2);
+}
+
+/* 海报 */
+.poster-btn {
+  margin-top: var(--space-2);
+}
+.offscreen-canvas {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 750px;
+  height: 1200px;
+}

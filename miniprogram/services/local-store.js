@@ -16,6 +16,7 @@ const {
 const { formatDistanceLabel, randomDistanceKm, pickBehavior, DURATIONS, randBetween, HOUR_MS } = require('../constants/outing')
 const { normalizePhotoIdentity, appendIdentity } = require('../utils/photo-identity')
 const { ENCOUNTER_INTIMACY, encounterCountOf } = require('../utils/encounters')
+const { normalizeCoat, normalizeRoomStyle } = require('../utils/cat-avatar')
 const STORE_KEY = 'mxh_local_db_v1'
 
 /** 内存缓存：同一会话避免每次进页都同步读整库 */
@@ -446,6 +447,7 @@ async function updateProfile(payload) {
   const user = ensureUser(db, openid)
   if (payload.nickName !== undefined) user.nickName = payload.nickName
   if (payload.avatarUrl !== undefined) user.avatarUrl = payload.avatarUrl
+  if (payload.roomStyle !== undefined) user.roomStyle = normalizeRoomStyle(payload.roomStyle)
   if (payload.displayCardId !== undefined) {
     const prev = user.displayCardId
     user.displayCardId = payload.displayCardId || ''
@@ -563,6 +565,7 @@ function createVisitToHostLocal(db, ownerOpenId, payload) {
     guestCardId: payload.guestCard._id,
     breed: payload.guestCard.breed,
     cutoutPath: payload.guestCard.cutoutPath || payload.guestCard.originalPath || '',
+    coat: payload.guestCard.coat || null,
     behaviorText: payload.behaviorText,
     behaviorIndex: payload.behaviorIndex,
     distanceKm: payload.distanceKm,
@@ -704,6 +707,7 @@ async function releaseCard(cardId, cloudRelease, cloudRoom) {
       originalPath: card.originalPath || '',
       cutoutFileId: card.cutoutFileId || '',
       originalFileId: card.originalFileId || '',
+      coat: card.coat || null,
       releasedBy: openid,
       releasedAt: Date.now(),
       visitCount: 0,
@@ -1053,6 +1057,7 @@ async function getRoomState({ cloudMode = false } = {}) {
           source: 'local',
           breed: activeVisitor.breed,
           cutoutPath: activeVisitor.cutoutPath,
+          coat: activeVisitor.coat || null,
           behaviorText: activeVisitor.behaviorText,
           distanceLabel: formatDistanceLabel(activeVisitor.distanceKm, showDistance),
           petByHost: !!activeVisitor.petByHost,
@@ -1448,6 +1453,7 @@ async function createCard(payload) {
     cutoutPath: payload.cutoutPath || '',
     originalPath: payload.originalPath || '',
     photoIdentities: appendIdentity([], normalizePhotoIdentity(payload.photoIdentity)),
+    coat: normalizeCoat(payload.coat),
     breed,
     recognizedBreed,
     pendingBreed,
@@ -1606,6 +1612,7 @@ async function updateCard(cardId, patch) {
   if (patch.cutoutFileId !== undefined) card.cutoutFileId = patch.cutoutFileId || ''
   if (patch.originalFileId !== undefined) card.originalFileId = patch.originalFileId || ''
   if (patch.mattingFailed !== undefined) card.mattingFailed = !!patch.mattingFailed
+  if (patch.coat !== undefined) card.coat = normalizeCoat(patch.coat)
   recomputeStats(db, openid)
   save(db)
   return { card }

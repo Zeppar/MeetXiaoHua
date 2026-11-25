@@ -47,8 +47,8 @@
 
       <view class="ready-actions anim-rise delay-3">
         <button class="btn-primary btn-block" bindtap="onShoot">点击拍照</button>
-        <button class="btn-secondary btn-block mt-3" bindtap="onUpload">上传图片</button>
-        <view class="tiny upload-tip">电脑调试没有相机时，可从本地选图（暂只抠图加白边）</view>
+        <button class="btn-secondary btn-block mt-3" bindtap="onUpload">从相册选一张</button>
+        <view class="tiny upload-tip">以前拍过的猫照片也可以，一样会抠图、描白边</view>
       </view>
     </view>
   </block>
@@ -119,7 +119,7 @@
 
       <view class="preview-actions">
         <button class="btn-secondary" bindtap="onRetake">{{retakeText}}</button>
-        <button class="btn-primary" loading="{{checkingMatches}}" disabled="{{checkingMatches || saving}}" bindtap="onSaveStart">{{checkingMatches ? '正在查找旧猫卡' : saveText}}</button>
+        <button class="btn-primary" loading="{{checkingMatches}}" disabled="{{checkingMatches || saving}}" bindtap="onSaveStart">{{checkingMatches ? (firstSaving ? '正在收进手帐' : '正在查找旧猫卡') : saveText}}</button>
       </view>
     </view>
   </block>

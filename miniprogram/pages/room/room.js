@@ -1,4 +1,5 @@
 const api = require('../../services/api')
+const { isDevBuild } = require('../../utils/env')
 const cache = require('../../services/storage-cache')
 const copy = require('../../constants/copy')
 const { BACKGROUNDS, isUnlocked, getUnlockNeed } = require('../../constants/backgrounds')
@@ -9,7 +10,18 @@ const { cardDisplayName } = require('../../utils/format')
 const { pickCardImage } = require('../../utils/card-media')
 const { formatOutingPostcard } = require('../../utils/outing-postcard')
 const { encounterSummary } = require('../../utils/encounters')
-const { blurCoordinate, getCurrentPosition } = require('../../utils/geo-blur')
+const catAvatar = require('../../utils/cat-avatar')
+
+/** 本机上次选的小屋模式：切换后立刻生效，不等云端同步 */
+const STYLE_KEY = 'mxh_room_style'
+function savedRoomStyle() {
+  try {
+    return wx.getStorageSync(STYLE_KEY) || ''
+  } catch (e) {
+    return ''
+  }
+}
+const { blurCoordinate, getPositionIfAuthorized } = require('../../utils/geo-blur')
 const nav = require('../../utils/navigate')
 const pageLoad = require('../../utils/page-load')
 
@@ -127,6 +139,8 @@ Page({
     dragId: '',
     showRing: false,
     showVisitorMenu: false,
+    /** 小屋显示模式：cartoon 卡通分身（默认）/ photo 真猫贴纸 */
+    roomStyle: 'cartoon',
     /** true：用户主动切到照顾面板，暂时不让明信片 / 来访占底部 */
     careFocus: false,
     ringActions: ACTION_LIST,
@@ -207,9 +221,27 @@ Page({
     const kind = e && e.target && e.target.dataset && e.target.dataset.kind
     const report = this.data.report
     if (kind === 'postcard' && report) {
-      return {
+      const base = {
         title: report.distanceLine || '我的猫出门回来，带回一张明信片',
         path: '/pages/home/home'
+      }
+      if (!report.cardId) return base
+      // 明信片分享：存一份快照，好友点开能看到这次出门的故事
+      return {
+        ...base,
+        promise: api.createShare({
+          kind: 'postcard',
+          cardId: report.cardId,
+          postcard: {
+            title: report.title || '',
+            line: report.distanceLine || '',
+            story: (report.postcard && report.postcard.story) || ''
+          }
+        })
+          .then((res) => (res && res.shareId
+            ? { ...base, path: `/pages/share-card/share-card?s=${encodeURIComponent(res.shareId)}` }
+            : base))
+          .catch(() => base)
       }
     }
     return { title: '来看看我的猫咪小屋', path: '/pages/home/home' }
@@ -407,6 +439,57 @@ Page({
     return pageLoad.run(this, () => this._refreshInner())
   },
 
+  /** 小屋里这只猫用什么图：卡通模式且有毛色 → 小屋分身；否则真猫贴纸 */
+  _catImage(card) {
+    const real = pickCardImage(card) || ''
+    if (!card || this._roomStyle === 'photo') return real
+    return catAvatar.avatarUri(card.coat) || real
+  },
+
+  _visitorView(visitor) {
+    if (!visitor) return visitor
+    const cartoon = this._roomStyle !== 'photo' && catAvatar.avatarUri(visitor.coat)
+    return { ...visitor, image: cartoon || visitor.cutoutPath || '' }
+  },
+
+  /** 切换卡通 / 真猫：本机立刻生效，同时双写到用户资料（本地先写、云端同步） */
+  onToggleRoomStyle() {
+    const next = this.data.roomStyle === 'photo' ? 'cartoon' : 'photo'
+    this._roomStyle = next
+    try {
+      wx.setStorageSync(STYLE_KEY, next)
+    } catch (e) {
+      /* 存不下就只在这次生效 */
+    }
+    this.setData({ roomStyle: next })
+    wx.showToast({ title: next === 'photo' ? '已切到真猫模式' : '已切到卡通模式', icon: 'none' })
+    api.updateProfile({ roomStyle: next }).catch((e) => console.warn('[room] save room style', e))
+    this.refresh()
+  },
+
+  /** 旧猫卡还没有毛色：从贴纸里读一次，双写进猫卡，之后小屋就能画分身 */
+  async _ensureCoats(cards) {
+    if (this._coatBusy) return
+    const todo = (cards || []).filter((c) => c && c._id && !catAvatar.normalizeCoat(c.coat) &&
+      !(this._coatTried || {})[c._id] && pickCardImage(c) && !String(c._id).startsWith('debug_'))
+    if (!todo.length) return
+    this._coatBusy = true
+    this._coatTried = this._coatTried || {}
+    let updated = 0
+    try {
+      for (const card of todo) {
+        this._coatTried[card._id] = true
+        const coat = await catAvatar.extractCoat(pickCardImage(card)).catch(() => null)
+        if (!coat || this.__mxhUnloaded) continue
+        await api.updateCard(card._id, { coat }).catch((e) => console.warn('[room] save coat', e))
+        updated++
+      }
+    } finally {
+      this._coatBusy = false
+    }
+    if (updated && !this.__mxhUnloaded && this._roomStyle !== 'photo') this.refresh()
+  },
+
   applyDisplayCard(displayCard) {
     if (!displayCard) {
       return {
@@ -421,7 +504,7 @@ Page({
     }
     const bond = intimacyView(displayCard)
     return {
-      displayImage: pickCardImage(displayCard),
+      displayImage: this._catImage(displayCard),
       displayBreed: cardDisplayName({
         ...displayCard,
         name: cache.getCardName(displayCard._id, displayCard.name || '')
@@ -454,7 +537,7 @@ Page({
       }
       mates.push({
         id: src._id,
-        image: pickCardImage(src) || '',
+        image: this._catImage(src),
         name: cardDisplayName(named),
         preview: false,
         x: slot.x,
@@ -506,6 +589,8 @@ Page({
     const force = this.data.debugForceHasCat
     const [{ cards }, room] = await Promise.all([api.listCards({}), api.getRoomState()])
     const user = room.user || {}
+    this._roomStyle = catAvatar.normalizeRoomStyle(savedRoomStyle() || user.roomStyle)
+    if (this.data.roomStyle !== this._roomStyle) this.setData({ roomStyle: this._roomStyle })
     // 背景按「一共遇见几次」解锁：真实再遇见同一只猫也算
     const encounterTotal = encounterSummary(cards || []).encounterTotal
     const currentBgId = user.roomBackgroundId || 'default'
@@ -671,7 +756,7 @@ Page({
       awayCatImage,
       outingCardId,
       unreadBadge: room.unreadBadge || 0,
-      visitor: room.visitor,
+      visitor: this._visitorView(room.visitor),
       leftTrace: room.leftTrace,
       debugLabel: this.debugLabelOf(force),
       ready: true
@@ -695,9 +780,14 @@ Page({
     }
 
     this.setData(patch, () => this._syncCatAi())
+    // 在家的猫缺毛色就补算（只算一次）；卡通模式下补完会自动换成分身
+    const homeIds = [patch.displayCardId].concat((patch.roomMates || []).map((m) => m.id)).filter(Boolean)
+    this._ensureCoats((cards || []).filter((c) => c && homeIds.indexOf(c._id) >= 0))
   },
 
   onToggleDebugUi() {
+    // 体验版 / 正式版不给用户打开调试
+    if (!isDevBuild()) return
     const next = !this.data.showDebugUi
     this.setData({ showDebugUi: next })
     if (next) wx.showToast({ title: '已打开调试', icon: 'none' })
@@ -900,8 +990,8 @@ Page({
         this._visitorBusy = true
         wx.showLoading({ title: '收下中…', mask: true })
         try {
-          // 定位可选：拿不到就先收下，之后在足迹页补地点
-          const loc = await getCurrentPosition()
+          // 定位可选：只有之前同意过才记地点，不为收卡片专门弹授权框
+          const loc = await getPositionIfAuthorized()
           const geo = loc ? blurCoordinate(loc.latitude, loc.longitude) : null
           const out = await api.adoptVisitor({
             visitId: visitor.id,

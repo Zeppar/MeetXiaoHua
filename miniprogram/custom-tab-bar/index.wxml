@@ -15,8 +15,9 @@
       </view>
     </view>
 
-    <view class="item {{selected === 2 ? 'on' : ''}}" hover-class="item-press" data-path="/pages/room/room" data-index="2" bindtap="onSwitch">
+    <view class="item {{selected === 2 ? 'on' : ''}} {{roomLocked ? 'item-locked' : ''}}" hover-class="item-press" data-path="/pages/room/room" data-index="2" bindtap="onSwitch">
       <image class="ico" src="/assets/icons/{{selected === 2 ? 'room-on' : 'room'}}.svg" />
+      <image wx:if="{{roomLocked}}" class="lock" src="/assets/art/room-lock.svg" mode="aspectFit" />
       <text class="label">小屋</text>
     </view>
     <view class="item {{selected === 3 ? 'on' : ''}}" hover-class="item-press" data-path="/pages/profile/profile" data-index="3" bindtap="onSwitch">

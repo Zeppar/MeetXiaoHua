@@ -1,0 +1,61 @@
+<view class="page page-sub share-page">
+  <!-- 正常展示 -->
+  <block wx:if="{{ready && share}}">
+    <view class="from tiny">{{share.isOwner ? '这是你分享出去的样子' : (share.ownerName + ' 分享了一只猫')}}</view>
+
+    <view class="card paper anim-rise">
+      <view class="tape tape-left"></view>
+      <view class="pic">
+        <image wx:if="{{share.image}}" class="sticker tilt-l pic-img" src="{{share.image}}" mode="aspectFit" />
+        <image wx:else class="pic-img pic-ghost" src="/assets/art/cat-shadow.svg" mode="aspectFit" />
+      </view>
+      <view wx:if="{{dateLabel}}" class="stamp card-stamp anim-stamp">
+        <text class="stamp-k">遇见</text>
+        <text class="stamp-v">{{dateLabel}}</text>
+      </view>
+
+      <view class="h2 name">{{displayName}}</view>
+      <view class="meta">
+        <text class="seal seal-blush">第 {{share.encounterCount}} 次遇见</text>
+        <text class="tiny">认识 {{share.knownDays}} 天</text>
+        <text wx:if="{{share.breed}}" class="tag tag-muted">{{share.breed}}</text>
+      </view>
+
+      <!-- 明信片分享：带上那次出门的故事 -->
+      <view wx:if="{{share.kind === 'postcard' && share.postcard}}" class="postcard-box">
+        <view wx:if="{{share.postcard.line}}" class="pc-line">{{share.postcard.line}}</view>
+        <view wx:if="{{share.postcard.story}}" class="pc-story hand">{{share.postcard.story}}</view>
+      </view>
+    </view>
+
+    <view class="cta anim-rise delay-1">
+      <block wx:if="{{share.isOwner}}">
+        <button class="btn-secondary btn-block" bindtap="onOpenMine">回到它的档案</button>
+      </block>
+      <block wx:else>
+        <view class="cta-copy hand">街上遇到的猫，拍一下就是你的贴纸</view>
+        <button class="btn-primary btn-block" bindtap="onMeet">我也去拍一只</button>
+      </block>
+    </view>
+  </block>
+
+  <!-- 朋友圈单页模式拉不到数据：用链接里的名字兜底 -->
+  <block wx:elif="{{ready && fallbackName}}">
+    <view class="card paper anim-rise">
+      <view class="pic">
+        <image class="pic-img" src="/assets/illus/cat-cutout-border.png" mode="aspectFit" />
+      </view>
+      <view class="h2 name">{{fallbackName}}</view>
+      <view class="tiny meta-tip">进入小程序就能看到它的贴纸</view>
+    </view>
+    <view class="cta">
+      <button class="btn-primary btn-block" bindtap="onMeet">我也去拍一只</button>
+    </view>
+  </block>
+
+  <view wx:elif="{{ready}}" class="empty anim-rise">
+    <image class="empty-illus" src="/assets/art/empty-album.svg" mode="aspectFit" />
+    <view class="empty-title">{{error || '这张分享打不开了'}}</view>
+    <button class="btn-primary empty-btn" bindtap="onMeet">去拍一只自己的猫</button>
+  </view>
+</view>

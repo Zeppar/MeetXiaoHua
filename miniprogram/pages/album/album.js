@@ -385,6 +385,12 @@ Page({
       })
       wx.showToast({ title: '名字已保存', icon: 'none' })
     } catch (err) {
+      // 名字没过内容安全：改回原来的名字并提示
+      if (err && err.code === 'CONTENT_RISKY') {
+        cache.setCardName(featured._id, featured.name || '')
+        wx.showToast({ title: err.message, icon: 'none' })
+        return
+      }
       // 本地名已写入，界面仍可用覆盖名
       const mapped = this.mapCard({ ...featured, name })
       const cards = (this.data.cards || []).map((c) => (c._id === featured._id ? mapped : c))

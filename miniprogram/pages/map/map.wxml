@@ -35,7 +35,7 @@
       <view class="nav-title-wrap">
         <text class="nav-title">我的足迹</text>
       </view>
-      <view class="nav-btn nav-settings" hover-class="tap-press" catchtap="onOpenSettings">设置</view>
+      <view wx:if="{{showDevSettings}}" class="nav-btn nav-settings" hover-class="tap-press" catchtap="onOpenSettings">设置</view>
     </view>
   </view>
 

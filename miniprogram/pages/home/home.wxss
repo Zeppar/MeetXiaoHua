@@ -259,3 +259,46 @@
   color: var(--color-primary-ink);
   text-decoration: underline;
 }
+
+/* 新用户首屏：只做「拍一只猫」 */
+.first {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: var(--space-6);
+  text-align: center;
+}
+.first-card {
+  position: relative;
+  width: 420rpx;
+  height: 420rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.first-sticker {
+  width: 320rpx;
+  height: 320rpx;
+}
+.first-stamp {
+  position: absolute;
+  right: -24rpx;
+  bottom: -24rpx;
+}
+.first-title {
+  margin-top: var(--space-6);
+  padding: 0 var(--space-3);
+}
+.first-sub {
+  margin-top: var(--space-2);
+}
+.first-cta {
+  margin-top: var(--space-6);
+  width: 100%;
+}
+.first-album {
+  margin-top: var(--space-4);
+  padding: 12rpx;
+  font-size: var(--font-sm);
+  color: var(--color-text-2);
+}

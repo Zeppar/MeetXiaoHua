@@ -1,9 +1,10 @@
 const api = require('../../services/api')
+const { isDevBuild } = require('../../utils/env')
 const cache = require('../../services/storage-cache')
 const copy = require('../../constants/copy')
 const { formatDateTime, cardDisplayName, formatDateShort } = require('../../utils/format')
 const { pickCardImage } = require('../../utils/card-media')
-const { getCurrentPosition, normalizeGeo, spreadFootprints } = require('../../utils/geo-blur')
+const { getCurrentPosition, getPositionIfAuthorized, normalizeGeo, spreadFootprints } = require('../../utils/geo-blur')
 const nav = require('../../utils/navigate')
 const pageLoad = require('../../utils/page-load')
 
@@ -171,6 +172,8 @@ function settingGroupsFor(setting) {
 
 Page({
   data: {
+    /** 地图调参面板是开发者自用的，体验版 / 正式版不显示 */
+    showDevSettings: isDevBuild(),
     latitude: DEFAULT_CENTER.latitude,
     longitude: DEFAULT_CENTER.longitude,
     /** 原生聚合用 addMarkers，组件 markers 保持空 */
@@ -503,8 +506,8 @@ Page({
   },
 
   async _loadInner() {
-    // 有定位：以定位为中心；拿不到定位时用固定兜底 DEFAULT_CENTER
-    const loc = await this.getUserLocation()
+    // 打开地图不主动申请定位：用户同意过才以当前位置为中心，否则用兜底中心
+    const loc = await getPositionIfAuthorized()
     if (this.__mxhUnloaded) return
     if (!this._viewportInteracted && !this.data.ready && !(cache.getMapPrefs() || {}).simulationAnchorId) {
       this.setData(loc || DEFAULT_CENTER)
@@ -512,18 +515,13 @@ Page({
 
     let fill = null
     try {
-      fill = await api.backfillMissingCardGeo({
-        baseLoc: loc
-          ? { latitude: loc.latitude, longitude: loc.longitude }
-          : null
-      })
+      // 只散开叠在一起的足迹；缺地点的猫留在「未标注地点」，由用户自己补，不拿当前位置去猜
+      fill = await api.backfillMissingCardGeo({ fillMissing: false })
       if (fill && fill.updated > 0) {
         wx.showToast({
           title: `已整理 ${fill.withGeoCount || fill.updated} 只猫的足迹`,
           icon: 'none'
         })
-      } else if (fill && fill.needAuth) {
-        wx.showToast({ title: '开启定位后可为旧猫补足迹', icon: 'none' })
       }
     } catch (e) {
       console.warn('[map] backfill geo', e)
@@ -1098,6 +1096,11 @@ Page({
   onPickClusterItem(e) {
     const id = e.currentTarget.dataset.id
     const sheet = this.data.clusterSheet
+    // 未标注地点：去它的详情页补（记下这里 / 在地图上选）
+    if (sheet && sheet.unlocated) {
+      if (id) nav.navigateTo(this, `/pages/card-detail/card-detail?id=${encodeURIComponent(id)}`)
+      return
+    }
     if (sheet && sheet.allFootprints) {
       const item = sheet.items.find((entry) => entry.id === id)
       if (item) this.setData({ detailCard: item })
@@ -1180,7 +1183,7 @@ Page({
         allFootprints: true,
         unlocated: true,
         title: `未标注地点 · ${items.length} 只`,
-        subtitle: '保存时没有记下地点。点一只查看，或者用你现在的位置补上（会模糊到街区）',
+        subtitle: '保存时没有记下地点。点一只去补（可以在地图上选），或者都用你现在的位置补上',
         items
       }
     })

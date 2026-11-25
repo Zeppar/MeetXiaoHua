@@ -14,7 +14,8 @@
     "pages/outing-history/outing-history",
     "pages/released/released",
     "pages/visit-log/visit-log",
-    "pages/breed-review/breed-review"
+    "pages/breed-review/breed-review",
+    "pages/share-card/share-card"
   ],
   "window": {
     "navigationBarBackgroundColor": "#FBF7F0",
@@ -62,7 +63,8 @@
     }
   },
   "requiredPrivateInfos": [
-    "getLocation"
+    "getLocation",
+    "chooseLocation"
   ],
   "sitemapLocation": "sitemap.json",
   "usingComponents": {

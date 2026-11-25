@@ -14,6 +14,16 @@ const localRembg = require('../constants/matting-local')
 const mattingMode = require('../constants/matting-mode')
 
 const CLOUD_TIMEOUT_MS = 45000
+
+/** 只有微信开发者工具里才连得到本机 127.0.0.1 的 rembg；手机上一律走云函数 */
+function isDevtools() {
+  try {
+    const info = (wx.getDeviceInfo && wx.getDeviceInfo()) || wx.getSystemInfoSync()
+    return info && info.platform === 'devtools'
+  } catch (e) {
+    return false
+  }
+}
 const LOCAL_REMBG_TIMEOUT_MS = 180000
 /** 裁切后再送抠图的最长边；猫块本身已小，无需整图 480 */
 const CROP_MAX_SIDE = 640
@@ -802,9 +812,10 @@ async function tryCloudVendorMatting(filePath, options = {}, provider = 'baidu')
     }
   }
 
-  const label = provider === 'tencent' ? '腾讯' : '百度'
+  const label = provider === 'tencent' ? '腾讯' : provider === 'rembg' ? '云端' : '百度'
   const prepared = await prepareMattingInput(filePath, options.canvas, options, {
-    maxSide: options.location ? CROP_MAX_SIDE : 960,
+    // 云端 rembg / GPU 服务与本机一样用 640，上传更快
+    maxSide: options.location || provider === 'rembg' ? CROP_MAX_SIDE : 960,
     quality: 0.9
   })
   const timing = (prepared.timing || []).slice()
@@ -861,10 +872,21 @@ async function makeStickerWithCloudMatting(filePath, options = {}) {
 
   // 识别流程指定：忽略 mode / 检测框，整图 rembg
   if (options.forceRembgFull) {
+    // 手机上：云函数 → REMBG_URL（自建 rembg / GPU 服务，模型由云函数环境变量 REMBG_MODEL 决定）
+    if (!isDevtools()) {
+      console.log('[cloud-matting] mode = cloud-rembg')
+      const cloud = await tryCloudVendorMatting(filePath, { ...options, location: null }, 'rembg')
+      return cloud && cloud.ok ? { ...cloud, provider: 'rembg-cloud' } : cloud
+    }
     console.log('[cloud-matting] mode = force-rembg-full')
     try {
       const rembg = await tryLocalRembg(filePath, { ...options, forceRembgFull: true })
       if (rembg && rembg.ok) return rembg
+      // 开发者工具里本机服务没开：退到云端，方便直接验证线上链路
+      if (rembg && rembg.code === 'REMBG_UNREACHABLE') {
+        const cloud = await tryCloudVendorMatting(filePath, { ...options, location: null }, 'rembg')
+        if (cloud && cloud.ok) return { ...cloud, provider: 'rembg-cloud' }
+      }
       return (
         rembg || {
           ok: false,

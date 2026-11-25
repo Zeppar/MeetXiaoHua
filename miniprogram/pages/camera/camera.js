@@ -2,11 +2,19 @@ const api = require('../../services/api')
 const { findCatMatches } = require('../../services/cat-identity')
 const copy = require('../../constants/copy')
 const { UNKNOWN_LABEL, CAT_BREEDS } = require('../../constants/breeds')
-const { blurCoordinate, isValidGeo, getCurrentPosition } = require('../../utils/geo-blur')
+const {
+  blurCoordinate,
+  isValidGeo,
+  getCurrentPosition,
+  getLocationAuthState,
+  chooseMeetPlace,
+  openLocationSetting
+} = require('../../utils/geo-blur')
 const nav = require('../../utils/navigate')
 const { makeStickerWithCloudMatting } = require('../../services/cloud-matting')
 const mattingMode = require('../../constants/matting-mode')
 const { isDevBuild } = require('../../utils/env')
+const onboarding = require('../../utils/onboarding')
 
 // false：暂关闭云识别，只做抠图白边；改回 true 恢复识别
 const RECOGNITION_ENABLED = true
@@ -142,8 +150,17 @@ Page({
   mattingStartedAt: 0,
   mattingCanvas: null,
 
+  onLoad(query) {
+    // 首页「从相册选一张」进来：直接打开相册
+    this._autoAlbum = !!(query && query.source === 'album')
+  },
+
   onReady() {
     this.initMattingCanvas()
+    if (this._autoAlbum) {
+      this._autoAlbum = false
+      this.onUpload()
+    }
     try {
       wx.createSelectorQuery().select('#identityCanvas').fields({ node: true }).exec((res) => {
         this.identityCanvas = res && res[0] && res[0].node
@@ -412,17 +429,21 @@ Page({
             timing.push(`整图rembg: ${rembgMs}ms`)
             console.log('[camera] rembg done → preview', rembgMs, 'ms', sticker && sticker.ok)
 
+            // 服务不可用 / 超时 / 今天次数用完：给失败页让用户重试；其他失败退回用原图做卡
             if (
               sticker &&
               !sticker.ok &&
-              (sticker.code === 'REMBG_UNREACHABLE' || sticker.code === 'TIMEOUT')
+              (sticker.code === 'REMBG_UNREACHABLE' || sticker.code === 'TIMEOUT' || sticker.code === 'DAILY_LIMIT')
             ) {
               applyResult({
                 ok: false,
                 code: sticker.code || 'MATTING_FAILED',
                 message:
-                  sticker.message ||
-                  '本机 rembg 失败，请确认已启动 7000 与 7001 代理',
+                  sticker.code === 'DAILY_LIMIT'
+                    ? sticker.message || '今天抠图次数用完了，明天再来吧'
+                    : this.data.showTiming
+                      ? sticker.message || '本机 rembg 失败，请确认已启动 7001 服务'
+                      : '抠图服务有点忙，请稍后再试',
                 timing
               })
               return
@@ -715,6 +736,17 @@ Page({
     const { state, result, checkingMatches, catMatches, showNoteModal, showPlaceModal } = this.data
     if (state !== 'preview' || !result || this._saving || checkingMatches || catMatches.length || showNoteModal || showPlaceModal) return
     const token = this.recognizeToken
+    // 第一只猫：图鉴是空的，查重、备注、地点都跳过，点一下就收下
+    if (await this._isFirstCat()) {
+      if (token !== this.recognizeToken) return
+      this._firstCat = true
+      this.setData({ checkingMatches: true, firstSaving: true })
+      await this._grabIdentityQuietly(token, 1500)
+      if (token !== this.recognizeToken) return
+      this.setData({ checkingMatches: false, firstSaving: false })
+      this.persistCard()
+      return
+    }
     this.setData({ checkingMatches: true })
     const { identity, matches } = await this._startCatMatch(token)
     if (token !== this.recognizeToken) return
@@ -733,6 +765,26 @@ Page({
     }
     this.setData({ checkingMatches: false, catMatches: matches })
     if (!matches.length) this.onAddNewCat()
+  },
+
+  async _isFirstCat() {
+    if (onboarding.cachedCardCount() > 0) return false
+    try {
+      const { cards } = await api.listCards({})
+      return !(cards && cards.length)
+    } catch (e) {
+      return true
+    }
+  },
+
+  /** 第一只猫不等查重，但照片特征后台算好了就顺手存上，方便以后认出「又是它」 */
+  _grabIdentityQuietly(token, waitMs) {
+    const pending = this._startCatMatch(token)
+    if (!pending) return Promise.resolve()
+    const done = pending.then(({ identity }) => {
+      if (this._catMatch && this._catMatch.token === token) this._catMatch.identity = identity
+    })
+    return Promise.race([done, new Promise((resolve) => setTimeout(resolve, waitMs))])
   },
 
   onCloseCatMatches() {
@@ -797,9 +849,25 @@ Page({
     this.ensureGeo()
   },
 
-  async ensureGeo() {
-    this.setData({ locating: true, locationHint: copy.tips.locating })
+  /**
+   * 定位时机：
+   * - silent（保存时）：只有用户之前同意过才静默取，没问过 / 拒绝过都不弹框
+   * - 打开地点弹窗：没问过就申请（用户此刻知道要记地点）；拒绝过不再自动打扰
+   * - explicit（用户点了「用我现在的位置」）：拒绝过就引导去设置
+   */
+  async ensureGeo({ silent = false, explicit = false } = {}) {
     const token = this.recognizeToken
+    const state = await getLocationAuthState()
+    if (token !== this.recognizeToken) return false
+    if ((silent && state !== 'granted') || (state === 'denied' && !explicit)) {
+      if (state === 'denied' && !silent) this.setData({ locating: false, locationHint: copy.tips.locationDenied })
+      return false
+    }
+    if (state === 'denied') {
+      const opened = await openLocationSetting()
+      if (!opened || token !== this.recognizeToken) return false
+    }
+    this.setData({ locating: true, locationHint: copy.tips.locating })
     const loc = await getCurrentPosition()
     if (token !== this.recognizeToken) return false
     if (!loc) {
@@ -807,7 +875,7 @@ Page({
         locating: false,
         geo: null,
         locationHint: copy.tips.locationRequired,
-        showLocationAuth: true
+        showLocationAuth: false
       })
       return false
     }
@@ -840,9 +908,27 @@ Page({
     this.persistCard()
   },
 
+  /** 地点弹窗的「记下地点」：用当前位置，或在地图上自己选（选点不需要定位授权） */
   onUseLocation() {
-    this.ensureGeo().then((ok) => {
-      if (ok) wx.showToast({ title: copy.tips.locationReady, icon: 'none' })
+    wx.showActionSheet({
+      itemList: ['用我现在的位置', '在地图上选'],
+      success: async (res) => {
+        if (res.tapIndex === 0) {
+          const ok = await this.ensureGeo({ explicit: true })
+          if (ok) wx.showToast({ title: copy.tips.locationReady, icon: 'none' })
+          return
+        }
+        const token = this.recognizeToken
+        const picked = await chooseMeetPlace(this.data.geo)
+        if (!picked || token !== this.recognizeToken) return
+        const customPlace = (this.data.placeText || '').trim()
+        this.setData({
+          geo: blurCoordinate(picked.latitude, picked.longitude),
+          locating: false,
+          locationHint: copy.tips.placePicked,
+          placeText: customPlace || picked.name.slice(0, 30)
+        })
+      }
     })
   },
 
@@ -873,7 +959,7 @@ Page({
     this._saving = true
     const token = this.recognizeToken
     // 定位可选：试一次，拿不到就不带坐标保存，足迹页「未标注地点」里可以再补
-    if (!isValidGeo(this.data.geo)) await this.ensureGeo()
+    if (!isValidGeo(this.data.geo)) await this.ensureGeo({ silent: true })
     if (token !== this.recognizeToken) {
       this._saving = false
       return
@@ -906,7 +992,9 @@ Page({
       wx.hideLoading()
       this.setData({ saving: false })
       if (savedWithoutGeo) wx.showToast({ title: copy.tips.savedWithoutGeo, icon: 'none' })
-      nav.redirectTo(this, `/pages/card-detail/card-detail?id=${card._id}`)
+      const first = this._firstCat ? '&first=1' : ''
+      this._firstCat = false
+      nav.redirectTo(this, `/pages/card-detail/card-detail?id=${card._id}${first}`)
     } catch (err) {
       this._saving = false
       wx.hideLoading()

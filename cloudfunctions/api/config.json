@@ -1,6 +1,10 @@
 {
   "permissions": {
-    "openapi": []
+    "openapi": [
+      "wxacode.getUnlimited",
+      "security.msgSecCheck",
+      "security.mediaCheckAsync"
+    ]
   },
   "timeout": 60,
   "memorySize": 256

@@ -347,6 +347,7 @@ function mergeCardLists(cloudCards, localCards) {
       ),
       ...mergeEncounterFields(c, localCard),
       intimacy: Math.max(Number(c.intimacy) || 0, Number(localCard.intimacy) || 0),
+      coat: c.coat || localCard.coat || null,
       geo: pickGeo(c.geo, localCard.geo)
     }
   })
@@ -648,6 +649,16 @@ async function updateCard(cardId, patch, { requireCloudWrite = false } = {}) {
   }
 
   let localRes = null
+  // 名字 / 地点会给别人看，云端可能因内容安全拒绝：先记下旧值，被拒时改回去并提示
+  let previousText = null
+  if (useCloud && (safePatch.name !== undefined || safePatch.placeText !== undefined)) {
+    try {
+      const before = await local.getCard(cardId)
+      if (before && before.card) previousText = { name: before.card.name || '', placeText: before.card.placeText || '' }
+    } catch (e) {
+      /* 拿不到旧值就不回滚 */
+    }
+  }
   try {
     localRes = await local.updateCard(cardId, safePatch)
   } catch (e) {
@@ -679,6 +690,16 @@ async function updateCard(cardId, patch, { requireCloudWrite = false } = {}) {
         throw new Error(cloudRes.error)
       }
     } catch (e) {
+      // 内容安全拒绝不是「云端故障」：这段文字本来就不该保存，本地改回去并告诉用户
+      if (e && e.code === 'CONTENT_RISKY') {
+        if (previousText) {
+          const revert = {}
+          if (safePatch.name !== undefined) revert.name = previousText.name
+          if (safePatch.placeText !== undefined) revert.placeText = previousText.placeText
+          await local.updateCard(cardId, revert).catch(() => {})
+        }
+        throw e
+      }
       console.warn('[api] cloud updateCard fail, keep local', e)
     }
   }
@@ -1263,6 +1284,31 @@ async function acceptVisitInvite(inviteId) {
   return res
 }
 
+/**
+ * 分享（只走云端）：分享是给别人看的只读快照，本地没有对应数据可写。
+ * 卡还没同步到云端（card_ 开头）时返回 null，调用方退回普通分享。
+ */
+async function createShare({ kind = 'card', cardId, postcard } = {}) {
+  if (!useCloud || !cardId || String(cardId).startsWith('card_')) return null
+  return callCloud('createShare', { kind, cardId, postcard })
+}
+
+async function getSharedCard(shareId) {
+  if (!useCloud) throw new Error('需要联网才能查看这只猫')
+  return callCloud('getSharedCard', { shareId })
+}
+
+async function getShareQrCode(shareId) {
+  if (!useCloud) return null
+  let envVersion = 'release'
+  try {
+    envVersion = wx.getAccountInfoSync().miniProgram.envVersion || 'release'
+  } catch (e) {
+    /* 取不到就按正式版 */
+  }
+  return callCloud('getShareQrCode', { shareId, envVersion })
+}
+
 async function adoptVisitor({ visitId, geo, placeText, source } = {}) {
   const payload = { visitId, geo, placeText }
   const useCloudVisit = useCloud && source !== 'local'
@@ -1298,7 +1344,8 @@ async function backfillMissingCardGeo(options = {}) {
   let updated = 0
   let needAuth = false
 
-  if (missing.length) {
+  // fillMissing:false：只散开叠点，不替缺地点的猫猜位置（足迹页打开时用）
+  if (missing.length && options.fillMissing !== false) {
     // 足迹页可传入已拿到的定位，避免二次 getLocation 失败导致补不齐
     const hinted = options.baseLoc || null
     const loc =
@@ -1421,6 +1468,9 @@ module.exports = {
   adoptVisitor,
   createVisitInvite,
   acceptVisitInvite,
+  createShare,
+  getSharedCard,
+  getShareQrCode,
   backfillMissingCardGeo,
   listMemories,
   createMemory,

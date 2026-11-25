@@ -116,7 +116,89 @@ function normalizeToCanvas(cards) {
   })
 }
 
+/**
+ * 定位授权状态：granted 已同意 / denied 拒绝过 / unknown 还没问过
+ * 规则：没问过就等用户有理由（点了按钮、打开地点弹窗）时再申请；拒绝过就不再自动申请
+ */
+function getLocationAuthState() {
+  return new Promise((resolve) => {
+    if (typeof wx.getSetting !== 'function') {
+      resolve('unknown')
+      return
+    }
+    wx.getSetting({
+      success: (res) => {
+        const v = res && res.authSetting && res.authSetting['scope.userLocation']
+        resolve(v === true ? 'granted' : v === false ? 'denied' : 'unknown')
+      },
+      fail: () => resolve('unknown')
+    })
+  })
+}
+
+/** 只有用户已经同意过才静默拿定位；没问过 / 拒绝过都直接返回 null，不弹授权框 */
+async function getPositionIfAuthorized(timeoutMs) {
+  const state = await getLocationAuthState()
+  if (state !== 'granted') return null
+  return getCurrentPosition(timeoutMs)
+}
+
+/**
+ * 让用户在微信地图上自己点选相遇地点（不需要开定位授权）
+ * 返回 { latitude, longitude, name } 或 null（取消 / 失败）
+ */
+function chooseMeetPlace(near) {
+  return new Promise((resolve) => {
+    if (typeof wx.chooseLocation !== 'function') {
+      resolve(null)
+      return
+    }
+    const opts = {
+      success: (res) => {
+        const lat = Number(res && res.latitude)
+        const lng = Number(res && res.longitude)
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          resolve(null)
+          return
+        }
+        resolve({ latitude: lat, longitude: lng, name: String((res && (res.name || res.address)) || '').trim() })
+      },
+      fail: () => resolve(null)
+    }
+    const g = normalizeGeo(near)
+    if (g) Object.assign(opts, { latitude: g.lat, longitude: g.lng })
+    wx.chooseLocation(opts)
+  })
+}
+
+/** 引导用户去设置页打开定位（只在用户点了明确的按钮时调用） */
+function openLocationSetting() {
+  return new Promise((resolve) => {
+    wx.showModal({
+      title: '定位没有打开',
+      content: '你之前拒绝了定位。可以去设置里打开，或者直接在地图上选一个地点。',
+      confirmText: '去设置',
+      cancelText: '算了',
+      success: (r) => {
+        if (!r.confirm) {
+          resolve(false)
+          return
+        }
+        wx.openSetting({
+          success: (res) => resolve(!!(res && res.authSetting && res.authSetting['scope.userLocation'])),
+          fail: () => resolve(false)
+        })
+      },
+      fail: () => resolve(false)
+    })
+  })
+}
+
 module.exports = {
+  getLocationAuthState,
+  getPositionIfAuthorized,
+  chooseMeetPlace,
+  openLocationSetting,
   blurCoordinate,
   normalizeGeo,
   isValidGeo,

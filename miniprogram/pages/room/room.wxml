@@ -62,6 +62,10 @@ module.exports = { km: km, clean: clean };
           <view class="tool-ico"><image class="tool-img" src="/assets/art/room-decor.svg" mode="aspectFit" /></view>
           <text class="tool-label">家具</text>
         </view>
+        <view class="tool {{roomStyle === 'cartoon' ? 'tool-on' : ''}}" hover-class="tap-press" bindtap="onToggleRoomStyle" aria-role="button" aria-label="切换卡通或真猫">
+          <view class="tool-ico"><image class="tool-img" src="/assets/art/cat-sit.svg" mode="aspectFit" /></view>
+          <text class="tool-label">{{roomStyle === 'cartoon' ? '卡通' : '真猫'}}</text>
+        </view>
         <view class="tool" hover-class="tap-press" bindtap="onChangeBg" aria-role="button" aria-label="换背景">
           <view class="tool-ico"><image class="tool-img" src="/assets/art/room-bg.svg" mode="aspectFit" /></view>
           <text class="tool-label">背景</text>
@@ -212,9 +216,9 @@ module.exports = { km: km, clean: clean };
           >
             <view class="note visitor-note">来自 {{visitor.distanceLabel}}</view>
             <image
-              wx:if="{{visitor.cutoutPath}}"
+              wx:if="{{visitor.image}}"
               class="visitor-img sticker tilt-r"
-              src="{{visitor.cutoutPath}}"
+              src="{{visitor.image}}"
               mode="aspectFit"
             />
             <image wx:else class="visitor-img visitor-ghost" src="/assets/art/cat-shadow.svg" mode="aspectFit" />
@@ -276,9 +280,9 @@ module.exports = { km: km, clean: clean };
       <view wx:elif="{{visitor && !careFocus && !showRing}}" class="tray paper focus anim-rise">
         <view class="focus-head">
           <image
-            wx:if="{{visitor.cutoutPath}}"
+            wx:if="{{visitor.image}}"
             class="focus-cat sticker"
-            src="{{visitor.cutoutPath}}"
+            src="{{visitor.image}}"
             mode="aspectFit"
           />
           <image wx:else class="focus-cat visitor-ghost" src="/assets/art/cat-shadow.svg" mode="aspectFit" />
@@ -398,9 +402,9 @@ module.exports = { km: km, clean: clean };
       <view class="vs-head">
         <view class="vs-pic">
           <image
-            wx:if="{{visitor.cutoutPath}}"
+            wx:if="{{visitor.image}}"
             class="vs-img sticker tilt-l"
-            src="{{visitor.cutoutPath}}"
+            src="{{visitor.image}}"
             mode="aspectFit"
           />
           <image wx:else class="vs-img visitor-ghost" src="/assets/art/cat-shadow.svg" mode="aspectFit" />

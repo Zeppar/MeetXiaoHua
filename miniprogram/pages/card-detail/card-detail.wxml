@@ -39,6 +39,16 @@
       </view>
       <view wx:if="{{territory}}" class="tiny faces-territory">它的地盘：{{territory}}</view>
 
+      <!-- 还没有地点：用户自己补，不替他猜 -->
+      <view wx:if="{{needPlace}}" class="place-card">
+        <view class="place-title">想在足迹地图上看到你们在哪相遇吗？</view>
+        <view class="tiny">地点会模糊到街区，只有你自己能看到</view>
+        <view class="action-pair place-actions">
+          <button wx:if="{{canPlaceHere}}" class="btn-secondary btn-sm grow" bindtap="onPlaceHere">记下这里</button>
+          <button class="btn-secondary btn-sm grow" bindtap="onPlacePick">在地图上选</button>
+        </view>
+      </view>
+
       <!-- 相遇信息 -->
       <view class="meta">
         <text wx:if="{{shotLabel}}" class="tag tag-muted">{{shotLabel}}</text>
@@ -97,9 +107,14 @@
 
     <!-- 操作 -->
     <view class="actions">
-      <block wx:if="{{!isInRoom}}">
+      <block wx:if="{{!isInRoom && roomUnlocked}}">
         <button class="btn-primary btn-block" bindtap="onAddToRoom">{{setDisplay}}</button>
         <button class="btn-secondary btn-block" bindtap="onEditNote">{{editNote}}</button>
+      </block>
+      <!-- 小屋还没解锁（不到 2 只猫）：先不提小屋 -->
+      <block wx:elif="{{!isInRoom}}">
+        <button class="btn-primary btn-block" bindtap="onEditNote">{{editNote}}</button>
+        <view class="tiny room-hint">再遇见一只猫，就能给它们一个小屋</view>
       </block>
       <block wx:else>
         <view class="room-status">
@@ -115,7 +130,9 @@
         <button class="btn-secondary grow" open-type="share" data-kind="invite">邀请好友接待它</button>
         <button class="btn-secondary grow" open-type="share" data-kind="card">分享猫卡</button>
       </view>
-      <button class="btn-ghost btn-block release-btn" bindtap="onRelease">{{releaseCat}}</button>
+      <button class="btn-soft btn-block poster-btn" bindtap="onMakePoster">生成海报（发朋友圈、小红书）</button>
+      <!-- 送去流浪是低频操作：收进「更多」 -->
+      <view class="more-link" hover-class="tap-press" bindtap="onMoreActions">更多操作 ›</view>
     </view>
 
     <text-modal
@@ -173,4 +190,8 @@
   </view>
 
   <cat-loading show="{{pageLoading}}" text="{{loadingText}}" />
+
+  <!-- 画海报和分享封面用，不显示 -->
+  <canvas type="2d" id="posterCanvas" class="offscreen-canvas"></canvas>
+  <canvas type="2d" id="coverCanvas" class="offscreen-canvas"></canvas>
 </view>

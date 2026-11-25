@@ -8,6 +8,21 @@ const { pickCardImage } = require('../../utils/card-media')
 const { intimacyView } = require('../../services/care-engine')
 const { roomOccupancy } = require('../../utils/room-mates')
 const { encounterCountOf, knownDaysOf, lastSeenOf, territoryOf } = require('../../utils/encounters')
+const onboarding = require('../../utils/onboarding')
+const {
+  normalizeGeo,
+  blurCoordinate,
+  getCurrentPosition,
+  getLocationAuthState,
+  chooseMeetPlace,
+  openLocationSetting
+} = require('../../utils/geo-blur')
+
+const { drawPoster, drawShareCover, writeBase64Png } = require('../../utils/poster')
+const { formatDateShort } = require('../../utils/format')
+
+/** 拍完多久内「记下这里」还算准：人大概率还在遇见它的地方 */
+const PLACE_HERE_WINDOW_MS = 30 * 60 * 1000
 const nav = require('../../utils/navigate')
 const pageLoad = require('../../utils/page-load')
 
@@ -94,6 +109,8 @@ Page({
 
   onLoad(query) {
     this.cardId = query.id || ''
+    // 第一只猫刚收下：高光时刻之后再请用户起名字
+    this._askNameOnce = query.first === '1'
   },
 
   onUnload() {
@@ -102,17 +119,29 @@ Page({
 
   /** 分享猫卡 / 邀请好友接待它：好友打开后，这只猫会去好友的小屋串门 */
   onShareAppMessage(e) {
-    const card = this.data.card || {}
     const name = this.data.displayName || '一只小猫'
-    const place = String(card.placeText || '').trim()
-    const imageUrl = /^(wxfile|https?):/.test(this.data.displayImage || '') ? this.data.displayImage : undefined
+    // 分享封面：优先用画好的「手帐纸 + 贴纸」图，没画好再退回原图
+    const imageUrl = this._shareCover ||
+      (/^(wxfile|https?):/.test(this.data.displayImage || '') ? this.data.displayImage : undefined)
     const kind = e && e.target && e.target.dataset && e.target.dataset.kind
+    const count = this.data.encounterCount || 1
+    // 标题不带地点：分享出去的东西都不暴露相遇位置
     const fallback = {
-      title: place ? `我在${place}遇见了${name}` : `我遇见了${name}`,
+      title: count > 1 ? `又遇见${name}了，这是第 ${count} 次` : `我遇见了${name}`,
       path: '/pages/home/home',
       imageUrl
     }
-    if (kind !== 'invite') return fallback
+    if (kind !== 'invite') {
+      // 分享猫卡：好友点开落到只读的分享查看页，能看到这只猫
+      return {
+        ...fallback,
+        promise: api.createShare({ kind: 'card', cardId: this.cardId })
+          .then((res) => (res && res.shareId
+            ? { ...fallback, path: `/pages/share-card/share-card?s=${encodeURIComponent(res.shareId)}` }
+            : fallback))
+          .catch(() => fallback)
+      }
+    }
     const invite = {
       title: `${name}想去你家串门`,
       imageUrl,
@@ -184,13 +213,180 @@ Page({
         isInRoom,
         isRoomMain: false,
         roomFull: occ.full,
-        roomTag: isInRoom ? '在小屋里' : ''
+        roomTag: isInRoom ? '在小屋里' : '',
+        roomUnlocked: onboarding.isRoomUnlocked(),
+        // 没有地点：不替用户猜，给两个补法；超过 30 分钟就不提供「记下这里」
+        needPlace: !normalizeGeo(named.geo) && String(this.cardId).indexOf('debug_') !== 0,
+        canPlaceHere: Date.now() - (Number(named.shotAt) || 0) <= PLACE_HERE_WINDOW_MS
       })
+      this._shareCover = ''
+      this._prepareShareCover()
+      if (this._askNameOnce) {
+        this._askNameOnce = false
+        wx.showToast({ title: '收进手帐啦，给它起个名字吧', icon: 'none' })
+        setTimeout(() => {
+          if (!this.__mxhUnloaded && !this.data.showNameModal) this.onEditName()
+        }, 900)
+      }
     })
   },
 
   onOutingHistory() {
     nav.navigateTo(this, `/pages/outing-history/outing-history?id=${this.cardId}`)
+  },
+
+  /** 记下这里：用户点了才申请定位（拒绝过就引导去设置） */
+  async onPlaceHere() {
+    if (this._placing) return
+    this._placing = true
+    try {
+      const state = await getLocationAuthState()
+      if (state === 'denied' && !(await openLocationSetting())) return
+      wx.showLoading({ title: '正在记下地点', mask: true })
+      const loc = await getCurrentPosition()
+      wx.hideLoading()
+      if (!loc) {
+        wx.showToast({ title: '没拿到定位，可以在地图上选', icon: 'none' })
+        return
+      }
+      await this._savePlace(loc, '')
+    } finally {
+      this._placing = false
+    }
+  },
+
+  /** 在地图上选：不需要定位授权，也能补很久以前遇到的猫 */
+  async onPlacePick() {
+    if (this._placing) return
+    this._placing = true
+    try {
+      const picked = await chooseMeetPlace()
+      if (picked) await this._savePlace(picked, picked.name)
+    } finally {
+      this._placing = false
+    }
+  },
+
+  async _savePlace(loc, name) {
+    const card = this.data.card || {}
+    const placeText = String(card.placeText || '').trim() && card.placeText !== '已记录当前位置'
+      ? card.placeText
+      : String(name || '').slice(0, 30)
+    try {
+      // 走 api.updateCard：本地先写，云端同步，失败保留本地
+      await api.updateCard(this.cardId, {
+        geo: blurCoordinate(loc.latitude, loc.longitude),
+        ...(placeText ? { placeText } : {})
+      })
+      wx.showToast({ title: '记下了，足迹地图上能看到它了', icon: 'none' })
+      this.load()
+    } catch (err) {
+      wx.showToast({ title: (err && err.message) || '没记上，请重试', icon: 'none' })
+    }
+  },
+
+  _canvasNode(id) {
+    return new Promise((resolve) => {
+      wx.createSelectorQuery().in(this).select('#' + id).fields({ node: true }).exec((res) => {
+        resolve((res && res[0] && res[0].node) || null)
+      })
+    })
+  },
+
+  _posterInfo() {
+    const card = this.data.card || {}
+    const count = this.data.encounterCount || 1
+    return {
+      image: this.data.displayImage,
+      name: this.data.displayName || '一只小猫',
+      line: `第 ${count} 次遇见 · 认识 ${this.data.knownDays || 1} 天`,
+      sub: card.breed && card.breed !== '待识别' ? card.breed : '',
+      dateLabel: card.shotAt ? formatDateShort(card.shotAt).slice(5) : ''
+    }
+  },
+
+  /** 分享卡片封面：进页后后台画好，分享时直接用 */
+  async _prepareShareCover() {
+    if (this._coverDrawing || !this.data.displayImage) return
+    this._coverDrawing = true
+    try {
+      const canvas = await this._canvasNode('coverCanvas')
+      if (!canvas) return
+      const count = this.data.encounterCount || 1
+      const path = await drawShareCover(canvas, {
+        image: this.data.displayImage,
+        badge: count > 1 ? `第 ${count} 次遇见` : ''
+      })
+      if (path && !this.__mxhUnloaded) this._shareCover = path
+    } catch (e) {
+      console.warn('[card-detail] share cover fail', e)
+    } finally {
+      this._coverDrawing = false
+    }
+  },
+
+  /** 生成海报：带小程序码（云端生成失败就写「微信搜索」），交给微信的分享图片菜单 */
+  async onMakePoster() {
+    if (this._postering || !this.data.card) return
+    this._postering = true
+    wx.showLoading({ title: '正在做海报', mask: true })
+    try {
+      const canvas = await this._canvasNode('posterCanvas')
+      if (!canvas) throw new Error('这台手机暂时画不了海报')
+      let qrPath = ''
+      try {
+        const share = await api.createShare({ kind: 'card', cardId: this.cardId })
+        const qr = share && share.shareId ? await api.getShareQrCode(share.shareId) : null
+        if (qr && qr.image) qrPath = await writeBase64Png(qr.image)
+      } catch (e) {
+        console.warn('[card-detail] poster qr fail', e)
+      }
+      const path = await drawPoster(canvas, { ...this._posterInfo(), qrPath })
+      wx.hideLoading()
+      if (typeof wx.showShareImageMenu === 'function') {
+        wx.showShareImageMenu({ path })
+      } else {
+        wx.previewImage({ urls: [path] })
+      }
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: (err && err.message) || '海报没做成，请重试', icon: 'none' })
+    } finally {
+      this._postering = false
+    }
+  },
+
+  onMoreActions() {
+    wx.showActionSheet({
+      itemList: ['分享到朋友圈', copy.buttons.releaseCat],
+      success: (res) => {
+        if (res.tapIndex === 0) this.onOpenSharePage()
+        if (res.tapIndex === 1) this.onRelease()
+      }
+    })
+  },
+
+  /**
+   * 朋友圈只能分享「当前页」，而详情页只有主人能看。
+   * 所以先打开这只猫的只读分享页，再从右上角「…」分享到朋友圈。
+   */
+  async onOpenSharePage() {
+    wx.showLoading({ title: '准备分享页', mask: true })
+    try {
+      const share = await api.createShare({ kind: 'card', cardId: this.cardId })
+      wx.hideLoading()
+      if (!share || !share.shareId) {
+        wx.showToast({ title: '这只猫还没同步到云端，稍后再试', icon: 'none' })
+        return
+      }
+      wx.navigateTo({
+        url: `/pages/share-card/share-card?s=${encodeURIComponent(share.shareId)}&timeline=1`,
+        success: () => wx.showToast({ title: '点右上角「…」分享到朋友圈', icon: 'none', duration: 2500 })
+      })
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: (err && err.message) || '没准备好，请重试', icon: 'none' })
+    }
   },
 
   onEditName() {
@@ -262,6 +458,7 @@ Page({
   async onNameConfirm(e) {
     const name = ((e && e.detail && e.detail.value) || '').trim()
     this.setData({ showNameModal: false })
+    const previousName = (this.data.card && this.data.card.name) || ''
     cache.setCardName(this.cardId, name)
     try {
       const { card } = await api.updateCard(this.cardId, { name })
@@ -271,6 +468,12 @@ Page({
         displayName: cardDisplayName(named)
       })
     } catch (err) {
+      // 名字没过内容安全：改回原来的名字并提示
+      if (err && err.code === 'CONTENT_RISKY') {
+        cache.setCardName(this.cardId, previousName)
+        wx.showToast({ title: err.message, icon: 'none' })
+        return
+      }
       const named = withSavedName({ ...(this.data.card || {}), _id: this.cardId, name })
       this.setData({
         card: named,

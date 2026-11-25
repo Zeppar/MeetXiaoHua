@@ -110,3 +110,20 @@
 .plus {
   transition: transform 0.15s ease;
 }
+
+/* 小屋未解锁：图标变淡 + 小锁 */
+.item-locked .ico,
+.item-locked .label {
+  opacity: 0.4;
+}
+.item-locked {
+  position: relative;
+}
+.lock {
+  position: absolute;
+  top: 4rpx;
+  right: 50%;
+  margin-right: -40rpx;
+  width: 28rpx;
+  height: 28rpx;
+}

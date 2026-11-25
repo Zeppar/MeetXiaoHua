@@ -6,7 +6,6 @@
         <image class="nav-btn-ico" src="/assets/icons/outing.svg" mode="aspectFit" />
       </view>
       <text class="nav-title">我的图鉴</text>
-      <view class="nav-link" hover-class="tap-press" catchtap="onReleased" aria-role="button" aria-label="流浪中的卡片">流浪的卡片</view>
     </view>
   </view>
   <view class="page album-page" style="padding-top: {{navPad}}px;">
@@ -63,12 +62,6 @@
             <text class="info-k">照片</text>
             <text class="info-v is-muted">还没有图</text>
             <text class="info-act">补图</text>
-          </view>
-          <view class="info-row" hover-class="tap-press" catchtap="onRelease">
-            <text class="info-k">去向</text>
-            <text class="info-v {{featured.breedPending ? 'is-muted' : ''}}">送它的卡片去街角流浪</text>
-            <text wx:if="{{featured.breedPending}}" class="seal seal-muted">审核中</text>
-            <text wx:else class="info-act info-act-quiet">送去流浪</text>
           </view>
         </view>
       </view>

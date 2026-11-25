@@ -4,6 +4,7 @@ const copy = require('../../constants/copy')
 const { formatDateShort, cardDisplayName } = require('../../utils/format')
 const { pickCardImage } = require('../../utils/card-media')
 const { encounterSummary } = require('../../utils/encounters')
+const onboarding = require('../../utils/onboarding')
 const { resolveHomeCards } = require('../../utils/room-mates')
 const nav = require('../../utils/navigate')
 
@@ -68,6 +69,9 @@ Page({
     recent: [],
     recentCount: 0,
     encounterTotal: 0,
+    /** 0 只猫：首屏只留「拍一只猫」 */
+    isNewbie: false,
+    roomUnlocked: false,
     myCat: { status: 'loading' },
     hasReport: false,
     visitor: null,
@@ -97,7 +101,15 @@ Page({
       this.getTabBar().setData({ selected: 0 })
     }
     const showPrivacy = !cache.isPrivacyAgreed()
-    this.setData({ showPrivacy, greeting: greetingOf(), today: todayLabel() })
+    // 先用缓存判断，避免老用户进首页闪一下新手页；真实数量回来后再校正
+    const cachedCount = onboarding.cachedCardCount()
+    this.setData({
+      showPrivacy,
+      greeting: greetingOf(),
+      today: todayLabel(),
+      isNewbie: cachedCount === 0 && !this._everHadCats,
+      roomUnlocked: onboarding.isRoomUnlocked(cachedCount)
+    })
     this.loadRoom(this.loadRecent())
   },
 
@@ -111,11 +123,30 @@ Page({
   },
 
   applyCards(all) {
+    if (all.length) this._everHadCats = true
+    // 升级前就有很多猫的老用户：不弹「小屋解锁了」
+    if (all.length > onboarding.ROOM_UNLOCK_CATS) onboarding.skipUnlockCelebration()
+    const roomUnlocked = onboarding.isRoomUnlocked(all.length)
     this.setData({
       recent: all.slice(0, 8).map(toRecent),
       recentCount: all.length,
-      encounterTotal: encounterSummary(all).encounterTotal
+      encounterTotal: encounterSummary(all).encounterTotal,
+      isNewbie: all.length === 0,
+      roomUnlocked
     })
+    const tabBar = typeof this.getTabBar === 'function' && this.getTabBar()
+    if (tabBar && tabBar.refreshLock) tabBar.refreshLock(all.length)
+    if (onboarding.takeUnlockCelebration(all.length)) {
+      wx.showModal({
+        title: '小屋解锁了',
+        content: '你已经认识两只猫了，给它们一个家吧。它们会在小屋里玩，偶尔还会出门串门。',
+        confirmText: '去看看',
+        cancelText: '等会儿',
+        success: (r) => {
+          if (r.confirm) nav.switchTab(this, '/pages/room/room')
+        }
+      })
+    }
   },
 
   async loadRecent() {
@@ -165,6 +196,12 @@ Page({
   onMeet() {
     if (!this.ensurePrivacy()) return
     nav.navigateTo(this, '/pages/camera/camera')
+  },
+
+  /** 身边没有猫时，从相册挑一张也能拿到第一张贴纸 */
+  onMeetFromAlbum() {
+    if (!this.ensurePrivacy()) return
+    nav.navigateTo(this, '/pages/camera/camera?source=album')
   },
 
   onAlbum() {
